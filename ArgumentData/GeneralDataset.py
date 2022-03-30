@@ -15,8 +15,8 @@ class ValidityNoveltyDataset(Dataset):
                      novelty: Optional[float] = None, weight: float = 1.):
             self.premise: str = premise
             self.conclusion = conclusion
-            self.validity: Optional[float] = min(1, max(0, validity))
-            self.novelty: Optional[float] = min(1, max(0, novelty))
+            self.validity: Optional[float] = min(1, max(0, validity)) if validity is not None else validity
+            self.novelty: Optional[float] = min(1, max(0, novelty)) if novelty is not None else novelty
             self.weight: float = weight
 
         def __str__(self) -> str:
@@ -83,9 +83,12 @@ class ValidityNoveltyDataset(Dataset):
         # y
         ret.update(
             {
-                "validity": torch.squeeze(torch.FloatTensor([sample.validity])),
-                "novelty": torch.squeeze(torch.FloatTensor([sample.novelty])),
-                "weight": torch.squeeze(torch.FloatTensor([sample.weight]))
+                "validity": torch.squeeze(
+                    torch.FloatTensor([torch.nan if sample.validity is None else sample.validity])),
+                "novelty": torch.squeeze(
+                    torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty])),
+                "weight": torch.squeeze(
+                    torch.FloatTensor([sample.weight]))
             }
         )
 
