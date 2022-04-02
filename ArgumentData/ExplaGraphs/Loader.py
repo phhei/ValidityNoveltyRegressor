@@ -6,6 +6,7 @@ import itertools
 from transformers import PreTrainedTokenizer
 from functools import reduce
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
+from ArgumentData.Utils import truncate_df
 
 dev_path = "ArgumentData/ExplaGraphs/dev.tsv"
 train_path = "ArgumentData/ExplaGraphs/train.tsv"
@@ -19,6 +20,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
     data = pandas.read_csv(filepath_or_buffer=train_path if split == "train" else dev_path,
                            sep="\t", quotechar=None, quoting=3, header=None,
                            names=["Conclusion", "Premise", "Stance", "ExplaGraph"])
+    data = truncate_df(data, max_number)
 
     logger.info("Loaded {} samples", len(data))
 
@@ -31,7 +33,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
         logger.debug("Process sample {} now", sid)
 
         graph = [tuple([node.strip("() ") for node in edge.split(";")])
-                 for edge in row_data["ExplaGraph"].str.split(")(")]
+                 for edge in row_data["ExplaGraph"].split(")(")]
         logger.trace("{} -{}-> {}{}",
                      row_data["Premise"],
                      row_data["ExplaGraph"],
@@ -39,18 +41,18 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
                      row_data["Conclusion"])
 
         edges_connecting_premise_conclusion = \
-            [edge for edge in graph if edge[0] in row_data["Premise"].str and edge[2] in row_data["Conclusion"]]
+            [edge for edge in graph if edge[0] in row_data["Premise"] and edge[2] in row_data["Conclusion"]]
         common_sense_nodes = {source for source, _, _ in graph
-                              if source not in row_data["Premise"].str and source not in row_data["Conclusion"].str}
+                              if source not in row_data["Premise"] and source not in row_data["Conclusion"]}
         common_sense_nodes.update(
             {sink for _, _, sink in graph
-             if sink not in row_data["Premise"].str and sink not in row_data["Conclusion"].str}
+             if sink not in row_data["Premise"] and sink not in row_data["Conclusion"]}
         )
         edges_containing_common_sense = [edge for edge in graph
-                                         if edge[0] not in row_data["Premise"].str or
-                                         edge[2] not in row_data["Conclusion"].str]
+                                         if edge[0] not in row_data["Premise"] or
+                                         edge[2] not in row_data["Conclusion"]]
         edges_only_common_sense = [edge for edge in graph
-                                   if edge[0] not in row_data["Premise"].str and edge[2] not in row_data["Conclusion"]]
+                                   if edge[0] not in row_data["Premise"] and edge[2] not in row_data["Conclusion"]]
         logger.trace("Graph containing {} edges ({} common-sense nodes: {})",
                      len(graph), len(common_sense_nodes), common_sense_nodes)
 
@@ -70,7 +72,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
 
         graph_is_easy_to_undermine = len(graph) >= 4 and graph_is_linear and len(edges_containing_common_sense) >= 1
         if graph_is_easy_to_undermine:
-            logger.warning("Sample {} is easy to undermine: {}-{}->{}",
+            logger.warning("Sample {} is easy to undermine: {}-{}->{}{}",
                            sid,
                            row_data["Premise"],
                            row_data["ExplaGraph"],
@@ -122,7 +124,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
         ))
 
         logger.debug("Successfully added a sample for row {}: {}", sid, samples[-1])
-        logger.debug("Validity: {} / Novelty: {}", samples[-1].validity, samples[-1].novelty)
+        logger.debug("Validity: {}% / Novelty: {}%", round(100*samples[-1].validity), round(100*samples[-1].novelty))
 
         if generate_non_novel_non_valid_samples_by_random:
             logger.trace("We have to create a nonsense-sample for row {}, too", sid)

@@ -23,8 +23,8 @@ class ValidityNoveltyDataset(Dataset):
             return "{}-->{} ({}/{})".format(
                 self.premise,
                 self.conclusion,
-                "Val: {}".format(self.validity) if self.validity is not None else "-",
-                "Nov: {}".format(self.novelty) if self.novelty is not None else "-"
+                "Val: {}".format(round(self.validity, 3)) if self.validity is not None else "-",
+                "Nov: {}".format(round(self.novelty, 3)) if self.novelty is not None else "-"
             )
 
         def __eq__(self, o: object) -> bool:
@@ -74,8 +74,7 @@ class ValidityNoveltyDataset(Dataset):
         sample = self.samples_extraction[index]
         ret = self.tokenizer(
             text=sample.premise, text_pair=sample.conclusion,
-            padding="max_length", padding_side="right",
-            truncation="longest_first", truncation_side ="right", max_length=self.max_length,
+            padding="max_length", truncation="longest_first", max_length=self.max_length,
             is_split_into_words=False, return_tensors="pt",
             return_overflowing_tokens=False, return_special_tokens_mask=False,
             return_offsets_mapping=False, return_length=False, verbose=True
@@ -83,14 +82,13 @@ class ValidityNoveltyDataset(Dataset):
         # y
         ret.update(
             {
-                "validity": torch.squeeze(
-                    torch.FloatTensor([torch.nan if sample.validity is None else sample.validity])),
-                "novelty": torch.squeeze(
-                    torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty])),
-                "weight": torch.squeeze(
-                    torch.FloatTensor([sample.weight]))
+                "validity": torch.FloatTensor([torch.nan if sample.validity is None else sample.validity]),
+                "novelty": torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty]),
+                "weight": torch.FloatTensor([sample.weight])
             }
         )
+
+        ret.data = {k: torch.squeeze(v) for k, v in ret.items()}
 
         return ret
 
@@ -98,8 +96,8 @@ class ValidityNoveltyDataset(Dataset):
         if not isinstance(other, ValidityNoveltyDataset):
             return super().__add__(other)
 
-        logger.info("You want to extend the dataset \"{}\" with \"{}\" ({}+{} = {} instances)", other.name, len(self),
-                    len(other), len(self) + len(other))
+        logger.info("You want to extend the dataset \"{}\" with \"{}\" ({}+{} = {} instances)",
+                    self.name, other.name, len(self), len(other), len(self) + len(other))
 
         self.name += " + {}".format(other.name)
         if self.tokenizer != other.tokenizer:
@@ -176,10 +174,10 @@ class ValidityNoveltyDataset(Dataset):
 
         if original_data:
             self.samples_original = list(set(self.samples_original))
-            removed_samples += len_self_samples_original - self.samples_original
+            removed_samples += len_self_samples_original - len(self.samples_original)
         if extracted_data:
             self.samples_extraction = list(set(self.samples_extraction))
-            removed_samples += len_self_samples_extraction - self.samples_original
+            removed_samples += len_self_samples_extraction - len(self.samples_original)
 
         try:
             logger.success("Successfully duplicated dataset and removed {} samples ({}%)",
