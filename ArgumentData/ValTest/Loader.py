@@ -90,7 +90,7 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
             if continuous_val_nov:
                 logger.debug("... with {}% validity and {}% novelty", round(100*validity), round(100*novelty))
     except KeyError:
-        logger.opt(exception=True).error("Your database {} is corrupted! Skip remaining lines!",
+        logger.opt(exception=True).error("Your database \"{}\" is corrupted! Skip remaining lines!",
                                          dev_path if split == "dev" else test_path)
 
     data = ValidityNoveltyDataset(

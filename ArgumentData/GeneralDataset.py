@@ -64,7 +64,7 @@ class ValidityNoveltyDataset(Dataset):
         self.samples_original: List[ValidityNoveltyDataset.Sample] = \
             samples if isinstance(samples, List) else list(samples)
         self.samples_extraction: List[ValidityNoveltyDataset.Sample] = \
-            samples if isinstance(samples, List) else list(samples)
+            samples.copy() if isinstance(samples, List) else list(samples)
 
         self.tokenizer = tokenizer
         self.max_length = max_length

@@ -1,14 +1,20 @@
+import datetime
+import pathlib
 import sys
 from pathlib import Path
+from pprint import pformat
 
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.ExplaGraphs.Loader import load_dataset as load_explagraphs
 from ArgumentData.ValTest.Loader import load_dataset as load_valtest
+from ArgumentData.ARCT.Loader import load_dataset as load_arct
 from loguru import logger
 
 import transformers
 import argparse
+
+VERSION: str = "V0.1"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -33,9 +39,15 @@ if __name__ == "__main__":
     argv.add_argument("--use_ExplaGraphs", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the ExplaGraphs for training. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
+    argv.add_argument("--use_ARCT", action="store", nargs="?", default="n/a", type=str, required=False,
+                      help="using the the ARCT-dataset for training. You can provide additional arguments "
+                           "for this dataset by replacing all the whitespaces with '#', starting with '#'")
     argv.add_argument("--use_ValTest", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the validation und test set. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
+    argv.add_argument("--use_ValForTrain", action="store_true", default=False, required=False,
+                      help="The ground truth data (dataset annotated with validity and novelty) isn't for training "
+                           "(bias) unless you want to handle the validation data as training data as well")
     argv.add_argument("--generate_more_training_samples", action="store_true", default=False, required=False,
                       help="Forces the training set to automatically generate (more) samples")
     argv.add_argument("--cold_start", action="store_true", default=False,  required=False,
@@ -62,8 +74,8 @@ if __name__ == "__main__":
     if args.use_ExplaGraphs != "n/a":
         if args.use_ExplaGraphs is None:
             logger.debug("You want to use the entire ExplaGraphs as a part of the training set - fine")
-            train += load_explagraphs(split="train", tokenizer=tokenizer)
-            train += load_explagraphs(split="dev", tokenizer=tokenizer)
+            train += load_arct(split="train", tokenizer=tokenizer)
+            train += load_arct(split="dev", tokenizer=tokenizer)
         else:
             logger.debug("You want to use the ExplaGraphs as a part of the training set with "
                          "following specifications: {}", args.use_ExplaGraphs)
@@ -93,6 +105,45 @@ if __name__ == "__main__":
                 continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
             )
 
+    if args.use_ARCT != "n/a":
+        if args.use_ARCT is None:
+            logger.debug("You want to use the entire ARCT-dataset as a part of the training set - fine")
+            train += load_arct(split="train", tokenizer=tokenizer)
+            train += load_arct(split="dev", tokenizer=tokenizer)
+            train += load_arct(split="test", tokenizer=tokenizer)
+        else:
+            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                         "following specifications: {}", args.use_ARCT)
+            arg_explagraphs = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+            arg_explagraphs.add_argument("-s", "--split", action="store", default="train", type=str,
+                                         choices=["all", "train", "dev", "test"], required=False)
+            arg_explagraphs.add_argument("-l", "--max_length_sample", action="store", default=108, type=int,
+                                         required=False)
+            arg_explagraphs.add_argument("-n", "--max_number", action="store", default=-1, type=int,
+                                         required=False)
+            arg_explagraphs.add_argument("--exclude_adversarial_data", action="store_true",
+                                         default=False, required=False)
+            arg_explagraphs.add_argument("--include_topic", action="store_true", default=False, required=False)
+            arg_explagraphs.add_argument("--include_debate_info", action="store_true", default=False, required=False)
+            arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
+                                         required=False)
+            arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                          required=False)
+            parsed_args_arct = arg_explagraphs.parse_args(
+                args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
+            )
+            for split in (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
+                train += load_arct(
+                    split=parsed_args_arct.split, tokenizer=tokenizer,
+                    max_length_sample=parsed_args_arct.max_length_sample,
+                    max_number=parsed_args_arct.max_number,
+                    continuous_val_nov=False if parsed_args_arct.continuous_val_nov < 0 else parsed_args_arct.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_arct.continuous_sample_weight,
+                    include_adversarial_data=not parsed_args_arct.exclude_adversarial_data,
+                    include_topic=parsed_args_arct.include_topic,
+                    include_debate_info=parsed_args_arct.include_debate_info
+                )
+
     if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
         if args.use_ValTest != "n/a":
             logger.debug("You want to use the ValTest as a part of the validation/ test set")
@@ -100,7 +151,10 @@ if __name__ == "__main__":
             logger.info("Default included dataset")
 
         if len(sys.argv) <= 1 or args.use_ValTest is None:
-            evaluation += load_valtest(split="dev", tokenizer=tokenizer)
+            ds = load_valtest(split="dev", tokenizer=tokenizer)
+            if args.use_ValForTrain:
+                train += ds
+            evaluation += ds
             test += load_valtest(split="test", tokenizer=tokenizer)
         else:
             arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
@@ -116,7 +170,7 @@ if __name__ == "__main__":
             parsed_args_ValTest = arg_ValTest.parse_args(
                 args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
             )
-            evaluation += load_valtest(
+            ds = load_valtest(
                 split="dev", tokenizer=tokenizer,
                 max_length_sample=parsed_args_ValTest.max_length_sample,
                 max_number=parsed_args_ValTest.max_number,
@@ -124,6 +178,9 @@ if __name__ == "__main__":
                 continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
                 continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
             )
+            if args.use_ValForTrain:
+                train += ds
+            evaluation += ds
             test += load_valtest(
                 split="test", tokenizer=tokenizer,
                 max_length_sample=parsed_args_ValTest.max_length_sample,
@@ -179,10 +236,14 @@ if __name__ == "__main__":
     if len(test) == 0:
         logger.warning("No test data given...")
 
-    trainer = ValNovTrainer(
+    output_dir: pathlib.Path = pathlib.Path(".out",
+                                            VERSION,
+                                            args.transformer,
+                                            str(train).replace("(", "_").replace(")", "_").replace("*", ""))
+    trainer: transformers.Trainer = ValNovTrainer(
         model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),
         args=transformers.TrainingArguments(
-            output_dir=".out/{}/".format(args.transformer),
+            output_dir=str(output_dir),
             do_train=True,
             do_eval=True,
             do_predict=True,
@@ -225,21 +286,50 @@ if __name__ == "__main__":
         logger.success("Finished the training -- ending with loss {}", round(train_out.training_loss, 4))
         trainer.save_metrics(split="train", metrics=trainer.metrics_format(metrics=train_out.metrics))
 
+        for early_stopping_callback \
+                in [cb for cb in trainer.callback_handler.callbacks
+                    if isinstance(cb, transformers.EarlyStoppingCallback)]:
+            removed_cb = trainer.pop_callback(early_stopping_callback)
+            logger.debug("Removed the following callback handler: {}. It's an early stopping training callback and "
+                         "since we're leaving the training procedure, we don't need them anymore.", removed_cb)
+
     if len(test) >= 10:
         test_metrics = trainer.metrics_format(
             metrics=trainer.evaluate(eval_dataset=test,
                                      ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                     metric_key_prefix="test_")
+                                     metric_key_prefix="test")
         )
 
-        logger.success("Test on {} test samples: {}", len(test),
-                       ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
+        try:
+            logger.success("Test on {} test samples: {}", len(test),
+                           ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
+        except TypeError:
+            logger.opt(exception=False).warning("Strange test-metrics-outputs-dict. Should be str->float, "
+                                                "but we have following: {}",
+                                                pformat(test_metrics, indent=2, compact=False))
         trainer.save_metrics(split="test", metrics=test_metrics)
 
     if args.save != "n/a":
         logger.debug("You want to save the model to {}", args.save)
         try:
             trainer.save_model(output_dir=args.save if args.save is not None else None)
-            logger.success("Successfully stored the model in: {}", Path(args.save).absolute())
+            logger.success("Successfully stored the model in: {}",
+                           Path(args.save).absolute() if args.save is not None else output_dir)
         except Exception:
             logger.opt(exception=True).error("Can't save to {}", args.save)
+
+    try:
+        info_code = output_dir.joinpath("sys-args.txt").write_text(
+            data="Run from {} with following inputs args:\n{}\n\n Train-data:{}/Dev-data:{}/Test-data:{}".format(
+                datetime.datetime.now().isoformat(),
+                "\n".join(sys.argv[1:]) if len(sys.argv) >= 2 else "no input args",
+                train, evaluation, test
+            ),
+            encoding="utf-8",
+            errors="ignore"
+        )
+        logger.info("OK, we're at the end - let's close the process by writing an Info-file at: {}",
+                    output_dir.joinpath("sys-args.txt").absolute())
+        logger.trace("Write-code: {}", info_code)
+    except IOError:
+        logger.opt(exception=False).info("No-info-file provided")
