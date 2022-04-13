@@ -37,26 +37,8 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
         is_novelty = eval_data.predictions[-1]
         should_novelty = eval_data.label_ids[-1]
 
-        return {
-            "mse_validity": numpy.mean((is_validity-should_validity)**2),
-            "mse_novelty": numpy.mean((is_novelty-should_novelty)**2),
-            "error_validity": numpy.mean(numpy.abs(is_validity-should_validity)),
-            "error_novelty": numpy.mean(numpy.abs(is_novelty-should_novelty)),
-            "approximately_hits_validity": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_validity-should_validity) < .2, 1, 0))/numpy.size(is_validity),
-            "approximately_hits_novelty": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_novelty - should_novelty) < .2, 1, 0))/numpy.size(is_novelty),
-            "exact_hits_validity": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_validity-should_validity) < .05, 1, 0))/numpy.size(is_validity),
-            "exact_hits_novelty": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_novelty - should_novelty) < .05, 1, 0))/numpy.size(is_novelty),
-            "approximately_hits": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_validity-should_validity) + numpy.abs(is_novelty-should_novelty) < .25, 1, 0)
-            )/numpy.size(is_validity),
-            "exact_hits": numpy.count_nonzero(
-                numpy.where(numpy.abs(is_validity - should_validity) + numpy.abs(is_novelty - should_novelty) < .05, 1, 0)
-            )/numpy.size(is_validity)
-        }
+        return _val_nov_metric(is_validity=is_validity, should_validity=should_validity,
+                               is_novelty=is_novelty, should_novelty=should_novelty)
     else:
         logger.warning("This metric can't return all metrics properly, "
                        "because validity and novelty are not distinguishable")
@@ -77,6 +59,30 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
                 numpy.where(numpy.abs(eval_data.predictions-eval_data.label_ids) < .05, 1, 0)
             ) / numpy.size(eval_data.predictions)
         }
+
+
+def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
+                    is_novelty: numpy.ndarray, should_novelty: numpy.ndarray) -> Dict[str, float]:
+    return {
+        "mse_validity": numpy.mean((is_validity - should_validity) ** 2),
+        "mse_novelty": numpy.mean((is_novelty - should_novelty) ** 2),
+        "error_validity": numpy.mean(numpy.abs(is_validity - should_validity)),
+        "error_novelty": numpy.mean(numpy.abs(is_novelty - should_novelty)),
+        "approximately_hits_validity": numpy.sum(
+            numpy.where(numpy.abs(is_validity - should_validity) < .2, 1, 0)) / numpy.size(is_validity),
+        "approximately_hits_novelty": numpy.sum(
+            numpy.where(numpy.abs(is_novelty - should_novelty) < .2, 1, 0)) / numpy.size(is_novelty),
+        "exact_hits_validity": numpy.sum(
+            numpy.where(numpy.abs(is_validity - should_validity) < .05, 1, 0)) / numpy.size(is_validity),
+        "exact_hits_novelty": numpy.sum(
+            numpy.where(numpy.abs(is_novelty - should_novelty) < .05, 1, 0)) / numpy.size(is_novelty),
+        "approximately_hits": numpy.sum(
+            numpy.where(numpy.abs(is_validity - should_validity) + numpy.abs(is_novelty - should_novelty) < .25, 1, 0)
+        ) / numpy.size(is_validity),
+        "exact_hits": numpy.sum(
+            numpy.where(numpy.abs(is_validity - should_validity) + numpy.abs(is_novelty - should_novelty) < .05, 1, 0)
+        ) / numpy.size(is_validity)
+    }
 
 
 class ValNovTrainer(Trainer):

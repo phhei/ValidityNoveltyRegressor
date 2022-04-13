@@ -3,3 +3,5 @@ numpy~=1.22.3
 pandas>=1.4.0
 torch==1.11.*
 transformers==4.17.0
+seaborn>=0.11
+matplotlib==3.*

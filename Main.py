@@ -61,6 +61,9 @@ if __name__ == "__main__":
                            "by replacing all the whitespaces with '#', starting with '#'")
     argv.add_argument("-skip", "--skip_training", action="store_true", default=False,  required=False)
     argv.add_argument("--save", action="store", nargs="?", type=str, default="n/a", required=False)
+    argv.add_argument("--analyse", action="store", nargs="*", type=str, default=["test"], required=False,
+                      help="You want to have a depth analysis of your data before training/ testing on it? "
+                           "Please define the split(s) here.")
 
     logger.info("Welcome to the ValidityNoveltyRegressor -- you made {} specific choices", len(sys.argv)-1)
 
@@ -240,6 +243,17 @@ if __name__ == "__main__":
                                             VERSION,
                                             args.transformer,
                                             str(train).replace("(", "_").replace(")", "_").replace("*", ""))
+
+    if "train" in args.analyse:
+        train.depth_analysis_data(show_heatmaps=False,
+                                  save_heatmaps=str(output_dir.joinpath("train_analyse.png").absolute()))
+    if "dev" in args.analyse or "development" in args.analyse or "val" in args.analyse or "validation" in args.analyse:
+        evaluation.depth_analysis_data(show_heatmaps=False,
+                                       save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
+    if "test" in args.analyse:
+        test.depth_analysis_data(show_heatmaps=False,
+                                 save_heatmaps=str(output_dir.joinpath("test.png").absolute()))
+
     trainer: transformers.Trainer = ValNovTrainer(
         model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),
         args=transformers.TrainingArguments(

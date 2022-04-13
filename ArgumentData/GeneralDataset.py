@@ -1,12 +1,20 @@
 import random
 from functools import reduce
-from typing import Optional, Any, Iterable, List, Union, Dict
+from typing import Optional, Any, Iterable, List, Union, Dict, Literal
+
+import matplotlib.pyplot
+import numpy
+
+import seaborn
+import matplotlib.pylab as plt
 
 import torch
 from loguru import logger
 from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
 from transformers import PreTrainedTokenizer
+
+from HGTrainer import _val_nov_metric
 
 
 class ValidityNoveltyDataset(Dataset):
@@ -250,6 +258,105 @@ class ValidityNoveltyDataset(Dataset):
                 )))
             }
         }
+
+    def depth_analysis_data(self, for_original_data: bool = False, steps: int = 5,
+                            show_heatmaps: bool = True, handling_not_known_data: Optional[float] = None,
+                            save_heatmaps: Optional[str] = None) -> None:
+        data = self.samples_original if for_original_data else self.samples_extraction
+
+        if len(data) == 0:
+            logger.warning("Not applicable in an empty dataset!")
+        else:
+            logger.trace("Test {} instances", len(data))
+
+        if handling_not_known_data is None:
+            logger.trace("You wan to ignore the data with unknown validity/ novelty - ok!")
+            data = [d for d in data if d.validity is not None and d.novelty is not None]
+            logger.info("Discarded {} instances, {} remain",
+                        (len(self.samples_original) if for_original_data else len(self.samples_extraction))-len(data),
+                        len(data))
+            if len(data) == 0:
+                logger.warning("You discarded all your data by ignoring unknown data-fields. "
+                               "Please try to set the handling_not_known_data to a float "
+                               "(treat unknown fields as this number for testing -- does not change the data itself)")
+                return
+        else:
+            logger.trace("You want to treat unknown data fields as {}", handling_not_known_data)
+            data = [ValidityNoveltyDataset.Sample(
+                premise=d.premise,
+                conclusion=d.conclusion,
+                validity=handling_not_known_data if d.validity is None else d.validity,
+                novelty=handling_not_known_data if d.novelty is None else d.novelty
+            ) for d in data]
+            logger.debug("Converted {} samples", len(data))
+
+        heatmap = numpy.zeros((steps, steps), dtype=float)
+        for i, val in enumerate(numpy.arange(0, 1, 1 / steps)):
+            for j, nov in enumerate(numpy.arange(0, 1, 1 / steps)):
+                if i < steps-1:
+                    heatmap[i][j] = \
+                        100*len([d for d in data
+                                 if val <= d.validity < val + 1 / steps and
+                                 nov <= d.novelty < nov + 1 / steps])/len(data)
+                else:
+                    heatmap[i][j] = \
+                        100 * len([d for d in data
+                                   if val <= d.validity and nov <= d.novelty]) / len(data)
+
+        with numpy.printoptions(precision=1, threshold=20, edgeitems=5, sign="-"):
+            logger.success("Calculated the percentage-heatmap (rows: validity, cols: novelty): {}", heatmap)
+
+        logger.trace("OK, now, let's test some voters...")
+
+        heatmap_prediction = numpy.zeros((steps + 1, steps + 1), dtype=float)
+        should_val_vector = numpy.array([d.validity for d in data], dtype=float, copy=False)
+        should_nov_vector = numpy.array([d.novelty for d in data], dtype=float, copy=False)
+        for i, val in enumerate(numpy.arange(0, 1 + 1 / steps, 1 / steps)):
+            for j, nov in enumerate(numpy.arange(0, 1 + 1 / steps, 1 / steps)):
+                results = _val_nov_metric(is_validity=numpy.ones((len(data),), dtype=float) * val,
+                                          is_novelty=numpy.ones((len(data),), dtype=float) * nov,
+                                          should_validity=should_val_vector,
+                                          should_novelty=should_nov_vector)
+                logger.info("OK, a predictor predicting always validity = {} and novelty = {} would have: {}",
+                            round(val, 2), round(nov, 2), results)
+                try:
+                    heatmap_prediction[i][j] = 100 * results["approximately_hits"]
+                    logger.debug("Number of approximately_hits: {}", round(results["approximately_hits"]))
+                except KeyError:
+                    logger.opt(exception=True).warning("Return (dict) of function \"_val_nov_metric\" changed - "
+                                                       "please update the code!")
+
+        if save_heatmaps is not None or show_heatmaps:
+            logger.trace("You want to see the heatmap - ok, lets load the matplotlib")
+            fig, (ax1, ax2) = matplotlib.pyplot.subplots(1, 2)
+            seaborn.heatmap(heatmap, vmin=0, vmax=min(100, numpy.max(heatmap)*2),
+                            annot=True, fmt=".0f", linewidths=.25, cbar=False,
+                            xticklabels=["{}>={}".format("val" if i == 0 else "", round(i, 2))
+                                         for i in numpy.arange(0, 1, 1 / steps)],
+                            yticklabels=["{}>={}".format("nov" if i == 0 else "", round(i, 2))
+                                         for i in numpy.arange(0, 1, 1 / steps)],
+                            ax=ax1)
+            ax1.set_title("Sample distribution (%)")
+            logger.trace("Heatmap was produced on axis {}...", ax1)
+
+            logger.trace("You want to see the heatmap of prediction-approximately_hits")
+            seaborn.heatmap(heatmap_prediction, vmin=0, vmax=100, annot=True, fmt=".0f", linewidths=.25, cbar=False,
+                            xticklabels=["{}={}".format("val" if i == 0 else "", round(i, 2))
+                                         for i in numpy.arange(0, 1 + 1 / steps, 1 / steps)],
+                            yticklabels=["{}={}".format("nov" if i == 0 else "", round(i, 2))
+                                         for i in numpy.arange(0, 1 + 1 / steps, 1 / steps)],
+                            ax=ax2)
+            ax2.set_title("Approximately hits of a static predictor (%)")
+            fig.set_size_inches(15, 7.5)
+
+            if show_heatmaps:
+                plt.show()
+                logger.info("Heatmap was shown...")
+            if save_heatmaps is not None:
+                fig.savefig(save_heatmaps, dpi=200)
+                logger.info("Heatmaps saved at \"{}\"", save_heatmaps)
+
+        logger.debug("Close the statistics-process...")
 
     def sample(self, number_or_fraction: Union[int, float] = .5, forced_balanced_dataset: bool = True,
                allow_automatically_created_samples: bool = False,
