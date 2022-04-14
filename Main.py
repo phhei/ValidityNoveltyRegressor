@@ -94,7 +94,7 @@ if __name__ == "__main__":
             arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
                                          required=False)
             arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                          required=False)
+                                         required=False)
             parsed_args_explagraphs = arg_explagraphs.parse_args(
                 args.use_ExplaGraphs[1:].split("#") if args.use_ExplaGraphs.startswith("#")
                 else args.use_ExplaGraphs.split("#")
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
                                          required=False)
             arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                          required=False)
+                                         required=False)
             parsed_args_arct = arg_explagraphs.parse_args(
                 args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
             )
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             arg_ValTest.add_argument("--continuous_val_nov", action="store_true", default=False,
                                      required=False)
             arg_ValTest.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                      required=False)
+                                     required=False)
             parsed_args_ValTest = arg_ValTest.parse_args(
                 args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
             )
@@ -254,7 +254,7 @@ if __name__ == "__main__":
         test.depth_analysis_data(show_heatmaps=False,
                                  save_heatmaps=str(output_dir.joinpath("test.png").absolute()))
 
-    trainer: transformers.Trainer = ValNovTrainer(
+    trainer = ValNovTrainer(
         model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),
         args=transformers.TrainingArguments(
             output_dir=str(output_dir),
@@ -272,7 +272,7 @@ if __name__ == "__main__":
             log_level="debug" if args.verbose else "warning",
             log_level_replica="info" if args.verbose else "warning",
             logging_strategy="steps",
-            logging_steps=10 if args.verbose else 50,
+            logging_steps=5 if args.verbose else 25,
             logging_nan_inf_filter=True,
             save_strategy="epoch",
             save_total_limit=1+int(args.verbose),

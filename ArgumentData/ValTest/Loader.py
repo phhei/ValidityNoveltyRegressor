@@ -46,21 +46,21 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
             if continuous_val_nov:
                 if num_comparable_voters > 0:
                     validity = \
-                        (.9*row_data["number_pos_validity_votes"]/num_voters+
-                         .5*row_data["number_neutral_validity_votes"]/num_voters)*\
-                        (1+(1/9)*row_data["votes_outperforming_in_validity"]/num_comparable_voters-
+                        (.9*row_data["number_pos_validity_votes"]/num_voters +
+                         .5*row_data["number_neutral_validity_votes"]/num_voters) * \
+                        (1+(1/9)*row_data["votes_outperforming_in_validity"]/num_comparable_voters -
                          (1/9)*row_data["votes_underperforming_in_validity"]/num_comparable_voters)
                     novelty = \
-                        (.9*row_data["number_pos_novelty_votes"]/num_voters+
-                         .5*row_data["number_neutral_novelty_votes"]/num_voters)*\
-                        (1+(1/9)*row_data["votes_outperforming_in_novelty"]/num_comparable_voters-
+                        (.9*row_data["number_pos_novelty_votes"]/num_voters +
+                         .5*row_data["number_neutral_novelty_votes"]/num_voters) * \
+                        (1+(1/9)*row_data["votes_outperforming_in_novelty"]/num_comparable_voters -
                          (1/9)*row_data["votes_underperforming_in_novelty"]/num_comparable_voters)
                 else:
                     validity = \
-                        (row_data["number_pos_validity_votes"]/num_voters+
+                        (row_data["number_pos_validity_votes"]/num_voters +
                          .5*row_data["number_neutral_validity_votes"]/num_voters)
                     novelty = \
-                        (row_data["number_pos_validity_votes"]/num_voters+
+                        (row_data["number_pos_validity_votes"]/num_voters +
                          .5*row_data["number_neutral_validity_votes"]/num_voters)
             else:
                 validity = \
@@ -109,5 +109,3 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
     logger.success("Successfully created the dataset: {}", data)
 
     return data
-
-

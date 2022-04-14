@@ -1,13 +1,11 @@
 import random
 from functools import reduce
-from typing import Optional, Any, Iterable, List, Union, Dict, Literal
+from typing import Optional, Any, Iterable, List, Union, Dict
 
+import matplotlib.pylab as plt
 import matplotlib.pyplot
 import numpy
-
 import seaborn
-import matplotlib.pylab as plt
-
 import torch
 from loguru import logger
 from torch.utils.data import Dataset
@@ -190,7 +188,7 @@ class ValidityNoveltyDataset(Dataset):
         try:
             logger.success("Successfully duplicated dataset and removed {} samples ({}%)",
                            removed_samples,
-                           round(100*removed_samples/
+                           round(100*removed_samples /
                                  sum([len_self_samples_original if original_data else 0,
                                       len_self_samples_extraction if extracted_data else 0]), 1))
         except ArithmeticError:
@@ -199,7 +197,7 @@ class ValidityNoveltyDataset(Dataset):
         return removed_samples
 
     def get_sample_class_distribution(self, for_original_data: bool = False) -> Dict[str, Dict[str, int]]:
-        data = self.samples_original if for_original_data else  self.samples_extraction
+        data = self.samples_original if for_original_data else self.samples_extraction
 
         logger.trace("Looking at {} samples", len(data))
 
@@ -417,7 +415,7 @@ class ValidityNoveltyDataset(Dataset):
                             if isinstance(v2, Dict) else v2),
                            count_original.values())
                 )
-                logger.warning("Your dataset hasn't enough samples to give balanaced {} samples. "
+                logger.warning("Your dataset hasn't enough samples to give balanced {} samples. "
                                "We can only offer {} samples", number, 9*number_samples_class)
             except ValueError:
                 logger.opt(exception=True).error("Seems to be that you would like to sample from an empty dataset! "
@@ -429,7 +427,7 @@ class ValidityNoveltyDataset(Dataset):
                            "(forced_balanced_dataset: {} + allow_empty_combinations: {}) "
                            "we cannot satisfy your sample-query. Please consider another parameter setting!",
                            forced_balanced_dataset, allow_empty_combinations)
-            return  self.samples_extraction
+            return self.samples_extraction
 
         for valid_cls, novel_cls in reduce(
                 lambda k1, k2: ([(k1, kk1) for kk1 in count_original[k1].keys()] if isinstance(k1, str) else k1) +
