@@ -222,11 +222,11 @@ if __name__ == "__main__":
                 args.sample[1:].split("#") if args.sample.startswith("#") else args.sample.split("#")
             )
             final_train_samples = train.sample(
-                number_or_fraction=parsed_args_sample.number if "number" in parsed_args_sample else
-                (parsed_args_sample.fraction if "fraction" in parsed_args_sample else 1.),
+                number_or_fraction=parsed_args_sample.number if parsed_args_sample.number is not None else
+                (parsed_args_sample.fraction if parsed_args_sample.fraction is not None else 1.),
                 forced_balanced_dataset=parsed_args_sample.not_forced_balanced_dataset,
                 allow_automatically_created_samples=args.generate_more_training_samples or
-                                                    ("fraction" in parsed_args_sample and parsed_args_sample.fraction >= 1)
+                                                    (parsed_args_sample.fraction is not None and parsed_args_sample.fraction >= 1)
             )
 
         logger.trace("Final training-samples: {}", " +++ ".join(map(lambda t: str(t), final_train_samples)))
@@ -252,7 +252,7 @@ if __name__ == "__main__":
                                        save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
     if "test" in args.analyse:
         test.depth_analysis_data(show_heatmaps=False,
-                                 save_heatmaps=str(output_dir.joinpath("test.png").absolute()))
+                                 save_heatmaps=str(output_dir.joinpath("test_analyse.png").absolute()))
 
     trainer = ValNovTrainer(
         model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),

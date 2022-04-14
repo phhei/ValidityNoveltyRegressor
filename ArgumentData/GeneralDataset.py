@@ -1,5 +1,6 @@
 import random
 from functools import reduce
+from pathlib import Path
 from typing import Optional, Any, Iterable, List, Union, Dict
 
 import matplotlib.pylab as plt
@@ -290,16 +291,13 @@ class ValidityNoveltyDataset(Dataset):
 
         heatmap = numpy.zeros((steps, steps), dtype=float)
         for i, val in enumerate(numpy.arange(0, 1, 1 / steps)):
+            include_max_border_validity = (i >= steps -1)
             for j, nov in enumerate(numpy.arange(0, 1, 1 / steps)):
-                if i < steps-1:
-                    heatmap[i][j] = \
+                include_max_border_novelty = (j >= steps - 1)
+                heatmap[i][j] = \
                         100*len([d for d in data
-                                 if val <= d.validity < val + 1 / steps and
-                                 nov <= d.novelty < nov + 1 / steps])/len(data)
-                else:
-                    heatmap[i][j] = \
-                        100 * len([d for d in data
-                                   if val <= d.validity and nov <= d.novelty]) / len(data)
+                                 if val <= d.validity < val + (1 + int(include_max_border_validity)) / steps and
+                                 nov <= d.novelty < nov + (1 + int(include_max_border_novelty)) / steps])/len(data)
 
         with numpy.printoptions(precision=1, threshold=20, edgeitems=5, sign="-"):
             logger.success("Calculated the percentage-heatmap (rows: validity, cols: novelty): {}", heatmap)
@@ -351,6 +349,7 @@ class ValidityNoveltyDataset(Dataset):
                 plt.show()
                 logger.info("Heatmap was shown...")
             if save_heatmaps is not None:
+                Path(save_heatmaps).parent.mkdir(parents=True, exist_ok=True)
                 fig.savefig(save_heatmaps, dpi=200)
                 logger.info("Heatmaps saved at \"{}\"", save_heatmaps)
 
@@ -370,7 +369,7 @@ class ValidityNoveltyDataset(Dataset):
             return self.samples_extraction
 
         random.seed(seed)
-        logger.debug("OK, you will select {} (out of {})", len(number), len(self.samples_original))
+        logger.debug("OK, you will select {} (out of {})", number, len(self.samples_original))
         logger.debug("Random stare: {}", random.getstate())
 
         if not forced_balanced_dataset:
