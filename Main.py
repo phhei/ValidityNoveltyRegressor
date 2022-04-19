@@ -9,6 +9,7 @@ from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.ExplaGraphs.Loader import load_dataset as load_explagraphs
 from ArgumentData.ValTest.Loader import load_dataset as load_valtest
 from ArgumentData.ARCT.Loader import load_dataset as load_arct
+from ArgumentData.ARCTUKWWarrants.Loader import load_dataset as load_arct_ukw
 from loguru import logger
 
 import transformers
@@ -41,6 +42,9 @@ if __name__ == "__main__":
                            "by replacing all the whitespaces with '#', starting with '#'")
     argv.add_argument("--use_ARCT", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the the ARCT-dataset for training. You can provide additional arguments "
+                           "for this dataset by replacing all the whitespaces with '#', starting with '#'")
+    argv.add_argument("--use_ARCTUKW", action="store", nargs="?", default="n/a", type=str, required=False,
+                      help="using the the UKW-Warrants-dataset for training. You can provide additional arguments "
                            "for this dataset by replacing all the whitespaces with '#', starting with '#'")
     argv.add_argument("--use_ValTest", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the validation und test set. You can provide additional arguments for this dataset "
@@ -91,8 +95,7 @@ if __name__ == "__main__":
                                          required=False)
             arg_explagraphs.add_argument("--generate_non_novel_non_valid_samples_by_random", action="store_true",
                                          default=False, required=False)
-            arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
-                                         required=False)
+            arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float, required=False)
             arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
                                          required=False)
             parsed_args_explagraphs = arg_explagraphs.parse_args(
@@ -117,22 +120,17 @@ if __name__ == "__main__":
         else:
             logger.debug("You want to use the ARCT-dataset as a part of the training set with "
                          "following specifications: {}", args.use_ARCT)
-            arg_explagraphs = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_explagraphs.add_argument("-s", "--split", action="store", default="train", type=str,
-                                         choices=["all", "train", "dev", "test"], required=False)
-            arg_explagraphs.add_argument("-l", "--max_length_sample", action="store", default=108, type=int,
-                                         required=False)
-            arg_explagraphs.add_argument("-n", "--max_number", action="store", default=-1, type=int,
-                                         required=False)
-            arg_explagraphs.add_argument("--exclude_adversarial_data", action="store_true",
-                                         default=False, required=False)
-            arg_explagraphs.add_argument("--include_topic", action="store_true", default=False, required=False)
-            arg_explagraphs.add_argument("--include_debate_info", action="store_true", default=False, required=False)
-            arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
-                                         required=False)
-            arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                         required=False)
-            parsed_args_arct = arg_explagraphs.parse_args(
+            arg_ARCT = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+            arg_ARCT.add_argument("-s", "--split", action="store", default="train", type=str,
+                                  choices=["all", "train", "dev", "test"], required=False)
+            arg_ARCT.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+            arg_ARCT.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+            arg_ARCT.add_argument("--exclude_adversarial_data", action="store_true", default=False, required=False)
+            arg_ARCT.add_argument("--include_topic", action="store_true", default=False, required=False)
+            arg_ARCT.add_argument("--include_debate_info", action="store_true", default=False, required=False)
+            arg_ARCT.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+            arg_ARCT.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+            parsed_args_arct = arg_ARCT.parse_args(
                 args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
             )
             for split in (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
@@ -140,12 +138,40 @@ if __name__ == "__main__":
                     split=parsed_args_arct.split, tokenizer=tokenizer,
                     max_length_sample=parsed_args_arct.max_length_sample,
                     max_number=parsed_args_arct.max_number,
-                    continuous_val_nov=False if parsed_args_arct.continuous_val_nov < 0 else parsed_args_arct.continuous_val_nov,
+                    continuous_val_nov=parsed_args_arct.continuous_val_nov,
                     continuous_sample_weight=parsed_args_arct.continuous_sample_weight,
                     include_adversarial_data=not parsed_args_arct.exclude_adversarial_data,
                     include_topic=parsed_args_arct.include_topic,
                     include_debate_info=parsed_args_arct.include_debate_info
                 )
+
+    if args.use_ARCTUKW != "n/a":
+        if args.use_ARCTUKW is None:
+            logger.debug("You want to use the entire ARCT-UKW--dataset as a part of the training set - fine")
+            train += load_arct_ukw(tokenizer=tokenizer)
+        else:
+            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                         "following specifications: {}", args.use_ARCT)
+            arg_ARCTUKW = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+            arg_ARCTUKW.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+            arg_ARCTUKW.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+            arg_ARCTUKW.add_argument("-th", "--quality_threshold", action="store", default=None, type=float,
+                                     required=False)
+            arg_ARCTUKW.add_argument("--include_topic", action="store_true", default=False, required=False)
+            arg_ARCTUKW.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+            arg_ARCTUKW.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+            parsed_args_arct_ukw = arg_ARCTUKW.parse_args(
+                args.use_ARCTUKW[1:].split("#") if args.use_ARCTUKW.startswith("#") else args.use_ARCTUKW.split("#")
+            )
+            train += load_arct_ukw(
+                tokenizer=tokenizer,
+                max_length_sample=parsed_args_arct_ukw.max_length_sample,
+                max_number=parsed_args_arct_ukw.max_number,
+                continuous_val_nov=parsed_args_arct_ukw.continuous_val_nov,
+                continuous_sample_weight=parsed_args_arct_ukw.continuous_sample_weight,
+                include_topic=parsed_args_arct_ukw.include_topic,
+                mace_ibm_threshold=parsed_args_arct_ukw.quality_threshold
+            )
 
     if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
         if args.use_ValTest != "n/a":

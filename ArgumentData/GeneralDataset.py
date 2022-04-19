@@ -291,7 +291,7 @@ class ValidityNoveltyDataset(Dataset):
 
         heatmap = numpy.zeros((steps, steps), dtype=float)
         for i, val in enumerate(numpy.arange(0, 1, 1 / steps)):
-            include_max_border_validity = (i >= steps -1)
+            include_max_border_validity = (i >= steps - 1)
             for j, nov in enumerate(numpy.arange(0, 1, 1 / steps)):
                 include_max_border_novelty = (j >= steps - 1)
                 heatmap[i][j] = \
@@ -300,7 +300,7 @@ class ValidityNoveltyDataset(Dataset):
                                  nov <= d.novelty < nov + (1 + int(include_max_border_novelty)) / steps])/len(data)
 
         with numpy.printoptions(precision=1, threshold=20, edgeitems=5, sign="-"):
-            logger.success("Calculated the percentage-heatmap (rows: validity, cols: novelty): {}", heatmap)
+            logger.success("Calculated the percentage-heatmap (row-number: validity, col-number: novelty): {}", heatmap)
 
         logger.trace("OK, now, let's test some voters...")
 
@@ -317,7 +317,7 @@ class ValidityNoveltyDataset(Dataset):
                             round(val, 2), round(nov, 2), results)
                 try:
                     heatmap_prediction[i][j] = 100 * results["approximately_hits"]
-                    logger.debug("Number of approximately_hits: {}", round(results["approximately_hits"]))
+                    logger.debug("Number of approximately_hits: {}%", round(100*results["approximately_hits"]))
                 except KeyError:
                     logger.opt(exception=True).warning("Return (dict) of function \"_val_nov_metric\" changed - "
                                                        "please update the code!")
@@ -327,9 +327,9 @@ class ValidityNoveltyDataset(Dataset):
             fig, (ax1, ax2) = matplotlib.pyplot.subplots(1, 2)
             seaborn.heatmap(heatmap, vmin=0, vmax=min(100, numpy.max(heatmap)*2),
                             annot=True, fmt=".0f", linewidths=.25, cbar=False,
-                            xticklabels=["{}>={}".format("val" if i == 0 else "", round(i, 2))
+                            xticklabels=["{}>={}".format("nov" if i == 0 else "", round(i, 2))
                                          for i in numpy.arange(0, 1, 1 / steps)],
-                            yticklabels=["{}>={}".format("nov" if i == 0 else "", round(i, 2))
+                            yticklabels=["{}>={}".format("val" if i == 0 else "", round(i, 2))
                                          for i in numpy.arange(0, 1, 1 / steps)],
                             ax=ax1)
             ax1.set_title("Sample distribution (%)")
@@ -337,9 +337,9 @@ class ValidityNoveltyDataset(Dataset):
 
             logger.trace("You want to see the heatmap of prediction-approximately_hits")
             seaborn.heatmap(heatmap_prediction, vmin=0, vmax=100, annot=True, fmt=".0f", linewidths=.25, cbar=False,
-                            xticklabels=["{}={}".format("val" if i == 0 else "", round(i, 2))
+                            xticklabels=["{}={}".format("nov" if i == 0 else "", round(i, 2))
                                          for i in numpy.arange(0, 1 + 1 / steps, 1 / steps)],
-                            yticklabels=["{}={}".format("nov" if i == 0 else "", round(i, 2))
+                            yticklabels=["{}={}".format("val" if i == 0 else "", round(i, 2))
                                          for i in numpy.arange(0, 1 + 1 / steps, 1 / steps)],
                             ax=ax2)
             ax2.set_title("Approximately hits of a static predictor (%)")

@@ -48,11 +48,16 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
         if selected_data_path_adversarial is not None:
             try:
                 old_len_df = len(df)
-                df = df.append(
-                    other=pandas.read_csv(selected_data_path_adversarial, index_col="#id", sep="\t").
-                        query(expr="adversarial==True", inplace=False).drop(columns=["adversarial"], inplace=False),
+                df = pandas.concat(
+                    objs=(
+                        df,
+                        pandas.read_csv(selected_data_path_adversarial, index_col="#id", sep="\t").
+                        query(expr="adversarial==True", inplace=False).drop(columns=["adversarial"], inplace=False)
+                    ),
+                    axis="index",
                     ignore_index=False,
-                    verify_integrity=True
+                    verify_integrity=True,
+                    copy=False
                 )
                 logger.success("Successfully appended {} adversarial samples!", len(df)-old_len_df)
             except ValueError:
