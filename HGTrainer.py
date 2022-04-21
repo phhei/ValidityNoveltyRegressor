@@ -15,14 +15,14 @@ def val_nov_loss(is_val: torch.Tensor, should_val: torch.Tensor, is_nov: torch.T
         weights = torch.ones_like(should_val)
         logger.debug("No weights-vector - assume, all {} samples should count equally", weights.size())
 
-    loss_validity = torch.pow(is_val - should_val, 2)
-    loss_novelty = torch.pow(is_nov - should_nov, 2)
+    loss_validity = torch.pow(is_val - torch.where(torch.isnan(should_val), is_val, should_val), 2)
+    loss_novelty = torch.pow(is_nov - torch.where(torch.isnan(should_nov), is_nov, should_nov), 2)
 
     logger.trace("loss_validity: {} / loss_novelty: {}", loss_validity, loss_novelty)
 
     loss = (.5 * (loss_validity * loss_novelty) + .5 * loss_validity + .5 * loss_novelty) * weights
 
-    return torch.nanmean(loss) if reduce else loss
+    return torch.mean(loss) if reduce else loss
 
 
 def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:

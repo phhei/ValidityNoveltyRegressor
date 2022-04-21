@@ -1,7 +1,7 @@
 import datetime
-import pathlib
 import sys
 from pathlib import Path
+from shutil import move
 from pprint import pformat
 
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
@@ -10,6 +10,8 @@ from ArgumentData.ExplaGraphs.Loader import load_dataset as load_explagraphs
 from ArgumentData.ValTest.Loader import load_dataset as load_valtest
 from ArgumentData.ARCT.Loader import load_dataset as load_arct
 from ArgumentData.ARCTUKWWarrants.Loader import load_dataset as load_arct_ukw
+from ArgumentData.IBMArgQuality.Loader import load_dataset as load_ibm
+from ArgumentData.StudentEssays.Loader import load_dataset as load_essays
 from loguru import logger
 
 import transformers
@@ -46,6 +48,14 @@ if __name__ == "__main__":
     argv.add_argument("--use_ARCTUKW", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the the UKW-Warrants-dataset for training. You can provide additional arguments "
                            "for this dataset by replacing all the whitespaces with '#', starting with '#'")
+    argv.add_argument("--use_IBM", action="store", nargs="?", default="n/a", type=str, required=False,
+                      help="using the the IBM-Argument-Quality-dataset for training. "
+                           "You can provide additional arguments for this dataset by replacing all the whitespaces "
+                           "with '#', starting with '#'")
+    argv.add_argument("--use_essays", action="store", nargs="?", default="n/a", type=str, required=False,
+                      help="using the the Student-Essays-dataset for training. "
+                           "You can provide additional arguments for this dataset by replacing all the whitespaces "
+                           "with '#', starting with '#'")
     argv.add_argument("--use_ValTest", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the validation und test set. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
@@ -147,7 +157,7 @@ if __name__ == "__main__":
 
     if args.use_ARCTUKW != "n/a":
         if args.use_ARCTUKW is None:
-            logger.debug("You want to use the entire ARCT-UKW--dataset as a part of the training set - fine")
+            logger.debug("You want to use the entire ARCT-UKW-dataset as a part of the training set - fine")
             train += load_arct_ukw(tokenizer=tokenizer)
         else:
             logger.debug("You want to use the ARCT-dataset as a part of the training set with "
@@ -171,6 +181,61 @@ if __name__ == "__main__":
                 continuous_sample_weight=parsed_args_arct_ukw.continuous_sample_weight,
                 include_topic=parsed_args_arct_ukw.include_topic,
                 mace_ibm_threshold=parsed_args_arct_ukw.quality_threshold
+            )
+
+    if args.use_IBM != "n/a":
+        if args.use_IBM is None:
+            logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
+            train += load_ibm(tokenizer=tokenizer)
+        else:
+            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                         "following specifications: {}", args.use_ARCT)
+            arg_IBM = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+            arg_IBM.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+            arg_IBM.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+            arg_IBM.add_argument("-th", "--quality_threshold", action="store", default=None, type=float, required=False)
+            arg_IBM.add_argument("-s", "--split", action="store", default="all", type=str,
+                                 choices=["all", "train", "dev", "test"], required=False)
+            arg_IBM.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+            arg_IBM.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+            parsed_args_ibm = arg_IBM.parse_args(
+                args.use_IBM[1:].split("#") if args.use_IBM.startswith("#") else args.use_IBM.split("#")
+            )
+            train += load_ibm(
+                tokenizer=tokenizer,
+                split=parsed_args_ibm.split,
+                max_length_sample=parsed_args_ibm.max_length_sample,
+                max_number=parsed_args_ibm.max_number,
+                continuous_val_nov=parsed_args_ibm.continuous_val_nov,
+                continuous_sample_weight=parsed_args_ibm.continuous_sample_weight,
+                quality_threshold=parsed_args_ibm.quality_threshold
+            )
+
+    if args.use_essays != "n/a":
+        if args.use_essays is None:
+            logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
+            train += load_essays(tokenizer=tokenizer)
+        else:
+            logger.debug("You want to use the Student-Essays-dataset as a part of the training set with "
+                         "following specifications: {}", args.use_essays)
+            arg_essays = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+            arg_essays.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+            arg_essays.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+            arg_essays.add_argument("--include_samples_without_detail_annotation_info", action="store_false",
+                                    default=True, required=False)
+            arg_essays.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+            arg_essays.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+            parsed_args_essays = arg_essays.parse_args(
+                args.use_essays[1:].split("#") if args.use_essays.startswith("#") else args.use_essays.split("#")
+            )
+            train += load_essays(
+                tokenizer=tokenizer,
+                max_length_sample=parsed_args_essays.max_length_sample,
+                max_number=parsed_args_essays.max_number,
+                exclude_samples_without_detail_annotation_info=
+                parsed_args_essays.include_samples_without_detail_annotation_info,
+                continuous_val_nov=parsed_args_essays.continuous_val_nov,
+                continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
             )
 
     if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
@@ -265,18 +330,27 @@ if __name__ == "__main__":
     if len(test) == 0:
         logger.warning("No test data given...")
 
-    output_dir: pathlib.Path = pathlib.Path(".out",
-                                            VERSION,
-                                            args.transformer,
-                                            str(train).replace("(", "_").replace(")", "_").replace("*", ""))
+    output_dir: Path = Path(".out",
+                            VERSION,
+                            args.transformer,
+                            str(train).replace("(", "_").replace(")", "_").replace("*", ""))
+    if output_dir.exists():
+        logger.warning("The dictionary \"{}\" exists already - [re]move it!", output_dir.absolute())
+        target = Path(".out", VERSION, "_old", args.transformer,
+                      "{} {}".format(datetime.datetime.now().isoformat(sep="_", timespec="minutes").replace(":", "-"),
+                                     output_dir.name))
+        logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    if "train" in args.analyse:
-        train.depth_analysis_data(show_heatmaps=False,
+    if (isinstance(args.analyse, str) and args.analyse == "train") or "train" in args.analyse:
+        train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
                                   save_heatmaps=str(output_dir.joinpath("train_analyse.png").absolute()))
-    if "dev" in args.analyse or "development" in args.analyse or "val" in args.analyse or "validation" in args.analyse:
+    if (isinstance(args.analyse, str) and (args.analyse.startswith("dev") or args.analyse.startswith("val"))) \
+            or "dev" in args.analyse or "development" in args.analyse \
+            or "val" in args.analyse or "validation" in args.analyse:
         evaluation.depth_analysis_data(show_heatmaps=False,
                                        save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
-    if "test" in args.analyse:
+    if (isinstance(args.analyse, str) and args.analyse == "test") or "test" in args.analyse:
         test.depth_analysis_data(show_heatmaps=False,
                                  save_heatmaps=str(output_dir.joinpath("test_analyse.png").absolute()))
 

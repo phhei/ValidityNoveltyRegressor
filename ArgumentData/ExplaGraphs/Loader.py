@@ -130,7 +130,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
             logger.trace("We have to create a nonsense-sample for row {}, too", sid)
             samples.append(ValidityNoveltyDataset.Sample(
                 premise=premise,
-                conclusion=data.sample(n=1)["conclusion"],
+                conclusion=data["Conclusion"].sample(n=1, random_state=2001).iloc[0],
                 validity=0,
                 novelty=0,
                 weight=.5 if continuous_sample_weight else 2
