@@ -1,3 +1,4 @@
+import math
 import random
 import torch
 import bert_score
@@ -43,8 +44,8 @@ def paraphrase(text: str, temperature: Optional[float] = None,
                                         return_overflowing_tokens=True,
                                         verbose=not fast)
 
-    length_input: int = torch.squeeze(input_encoded.pop("length")).data
-    overflow: int = torch.squeeze(input_encoded.pop("num_truncated_tokens").data)
+    length_input: int = torch.squeeze(input_encoded.pop("length")).item()
+    overflow: int = torch.squeeze(input_encoded.pop("num_truncated_tokens")).item()
     overflow_str: str = paraphrase_model[0].decode(token_ids=torch.squeeze(input_encoded.pop("overflowing_tokens")),
                                                    skip_special_tokens=False, clean_up_tokenization_spaces=True)
     logger.debug("Your encoded input has the length of {} tokens (beware the model's max-length of {})",
@@ -55,7 +56,7 @@ def paraphrase(text: str, temperature: Optional[float] = None,
     paraphrases_original = paraphrase_model[0].batch_decode(
         paraphrase_model[1].generate(**input_encoded,
                                      max_length=30 if fast else min(paraphrase_model[0].model_max_length,
-                                                                    length_input*1.2),
+                                                                    math.ceil(length_input*1.2)),
                                      num_beams=2+5*int(not fast)+int(avoid_equal_return)+3*int(maximize_dissimilarity),
                                      num_return_sequences=1+2*int(avoid_equal_return)+3*int(maximize_dissimilarity),
                                      temperature=temperature or (1.1+.5*int(maximize_dissimilarity))),
@@ -86,7 +87,7 @@ def paraphrase(text: str, temperature: Optional[float] = None,
                 p, torch.sum(
                     bertscore_model.score(cands=[p]*len(paraphrases), refs=paraphrases, verbose=not fast,
                                           batch_size=len(paraphrases))[-1]
-                ).data
+                ).item()
              )
             for p in paraphrases
         ]
@@ -145,8 +146,8 @@ def summarize(text: str, text_pair: Optional[str] = None, summarization_model_na
                                            return_overflowing_tokens=True,
                                            verbose=not fast)
 
-    length_input: int = torch.squeeze(input_encoded.pop("length")).data
-    overflow: int = torch.squeeze(input_encoded.pop("num_truncated_tokens").data)
+    length_input: int = torch.squeeze(input_encoded.pop("length")).item()
+    overflow: int = torch.squeeze(input_encoded.pop("num_truncated_tokens")).item()
     overflow_str: str = summarization_model[0].decode(token_ids=torch.squeeze(input_encoded.pop("overflowing_tokens")),
                                                       skip_special_tokens=False, clean_up_tokenization_spaces=True)
     logger.debug("Your encoded input has the length of {} tokens (beware the model's max-length of {})",
@@ -157,7 +158,7 @@ def summarize(text: str, text_pair: Optional[str] = None, summarization_model_na
     summarization = summarization_model[0].batch_decode(
         summarization_model[1].generate(**input_encoded,
                                         max_length=15 if fast else min(summarization_model[0].model_max_length,
-                                                                       max(length_input * .15, 10)),
+                                                                       max(math.ceil(length_input * .15), 10)),
                                         num_beams=2 if fast else 5,
                                         num_return_sequences=1,
                                         temperature=temperature),
