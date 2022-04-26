@@ -3,9 +3,12 @@ import random
 import torch
 import bert_score
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Literal
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 from loguru import logger
+
+from nltk import sent_tokenize, word_tokenize, pos_tag_sents
+from nltk.corpus import wordnet
 
 paraphrase_model: Optional[Tuple[PegasusTokenizer, PegasusForConditionalGeneration]] = None
 summarization_model: Optional[Tuple[PegasusTokenizer, PegasusForConditionalGeneration]] = None
@@ -167,3 +170,104 @@ def summarize(text: str, text_pair: Optional[str] = None, summarization_model_na
     logger.debug("Fetched following summarization: \"{}\"", summarization)
 
     return summarization
+
+
+def add_prefix(text: str, part: Literal["undefined", "premise", "conclusion"] = "undefined") -> str:
+    logger.trace("Enriching \"{}\" ({})", text, part)
+
+    if part == "premise":
+        return "{} {}{}".format(
+            random.choice(["In my opinion,", "Let's assume:", "Nevertheless,"]),
+            text[0].lower(),
+            text[1:]
+        )
+    elif part == "conclusion":
+        return "{} {} {}".format(
+            random.choice(["Therefore,", "Hence,", "To conclude,"]),
+            text[0].lower(),
+            text[1:]
+        )
+
+    return text.lower().replace(".", "!").replace("?", "???")
+
+
+fill_words = ("absolutely", "actual", "actually", "anyway", "apparently", "approximately", "basically", "certainly",
+              "clearly", "completely", "definitely", "hopefully", "just", "largely", "particularly",  "really",
+              "rather",  "totally", "very")
+
+
+def remove_non_content_words_manipulate_punctuation(text: str) -> str:
+    ret = text
+    try:
+        ret = " ".join(filter(lambda t: len(t) >= 2 and t not in fill_words,
+                              word_tokenize(text=text, language="english", preserve_line=False)))
+        logger.trace("Removed all the fill-words: \"{}\"->\"{}\"", text, ret)
+    except LookupError:
+        logger.opt(exception=False).warning("No fill-word-remove possible")
+
+    return ret + random.choice(["", ".", "...", "!"])
+
+
+def wordnet_changes_text(text: str, direction: Literal["more_concrete", "more_general", "similar"] = "similar",
+                         change_threshold: float = .66, maximum_synsets_to_fix: int = 3) -> str:
+    final_ret = ""
+    try:
+        for sent in pos_tag_sents([word_tokenize(text=s, language="english", preserve_line=False)
+                                   for s in sent_tokenize(text=text, language="english")],
+                                  tagset="universal"):
+            logger.trace("Processing sentence: {}", " - ".join(map(lambda s: s[0], sent)))
+            final_ret += " " if len(final_ret) >= 1 else ""
+            for token, pos in sent:
+                if pos in ["PRON", "ADP", "CONJ", "DET", "NUM", "PRT", "X"]:
+                    logger.trace("There is nothing to change on \"{}\" - keep it!", token)
+                    final_ret += " {}".format(token) if len(final_ret) >= 1 else token
+                elif pos == ".":
+                    final_ret += token
+                else:
+                    logger.trace("This word \"{}\" ({}) we may change...", token, pos)
+                    if random.random() >= change_threshold:
+                        logger.trace("Yes, the randomness says: change it!")
+                        synsets = wordnet.synsets(
+                            lemma=token,
+                            pos=wordnet.NOUN if pos == "NOUN" else (wordnet.VERB if pos == "VERB" else
+                                                                    (wordnet.ADJ if pos == "ADJ" else wordnet.ADV))
+                        )
+
+                        if len(synsets) == 0:
+                            logger.trace("Word \"{}\" not found in WordNet (Version: {})", token, wordnet.get_version())
+                            if pos == "ADJ":
+                                final_ret += " {}{}".format("very "if direction != "more_general" else "", token)\
+                                    if len(final_ret) >= 1 else token
+                            elif pos == "VERB":
+                                final_ret += " {}{}".format("{} ".format(random.choice(fill_words))
+                                                            if direction != "more_general" else "", token) \
+                                    if len(final_ret) >= 1 else token
+                            else:
+                                final_ret += " {}".format(token) if len(final_ret) >= 1 else token
+                        elif 1 <= len(synsets) <= maximum_synsets_to_fix:
+                            logger.trace("1 <= {} synsets <= {}", len(synsets), maximum_synsets_to_fix)
+                            synset = random.choice(synsets)
+                            logger.debug("We pick the synset \"{}\" - {}", synset.name(), synset.definition())
+                            if direction == "more_general":
+                                synset = random.choice(h) if len(h := synset.hypernyms()) >= 1 else synset
+                                logger.debug("Successfully make a more general decision: \"{}\" -> {}",
+                                             token, synset.name())
+                            elif direction == "more_concrete":
+                                synset = random.choice(h) if len(h := synset.hyponyms()) >= 1 else synset
+                                logger.debug("Successfully make a more specific decision: \"{}\" -> {}",
+                                             token, synset.name())
+
+                            final_word = random.choice(synset.lemmas()).name().replace("_", " ")
+                            logger.trace("Finally: \"{}\" --> \"{}\"", token, final_word)
+                            final_ret += " {}".format(final_word) if len(final_ret) >= 1 else final_word
+                        else:
+                            logger.info("We have too much synsets (> {}): {}",
+                                        maximum_synsets_to_fix, " + ".join(map(lambda s: s.name(), synsets)))
+                            final_ret += " {}".format(token) if len(final_ret) >= 1 else token
+                    else:
+                        logger.trace("No change -- to high change_threshold of {}", change_threshold)
+                        final_ret += " {}".format(token) if len(final_ret) >= 1 else token
+    except LookupError:
+        logger.opt(exception=True).error("NLTK not complete - cancel!")
+
+    return final_ret if len(final_ret) >= 1 else text

@@ -1,6 +1,7 @@
 import random
 from functools import reduce
 from pathlib import Path
+from pandas import DataFrame
 from typing import Optional, Any, Iterable, List, Union, Dict
 
 import matplotlib.pylab as plt
@@ -13,7 +14,11 @@ from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
 from transformers import PreTrainedTokenizer
 
+from nltk import sent_tokenize
+
 from HGTrainer import _val_nov_metric
+from ..Utils import paraphrase, summarize, add_prefix, remove_non_content_words_manipulate_punctuation, \
+    wordnet_changes_text
 
 
 class ValidityNoveltyDataset(Dataset):
@@ -47,16 +52,228 @@ class ValidityNoveltyDataset(Dataset):
         def is_novel(self, none_is_not: bool = False) -> Optional[bool]:
             return (False if none_is_not else None) if self.novelty is None else self.novelty >= .5
 
-        def automatically_create_non_valid_non_novel_sample(self):
-            raise NotImplementedError()
+        def automatically_create_non_valid_non_novel_sample(self, other_random_sample: Optional[Any] = None):
+            if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
+                raise NotImplementedError("Negation script is not implemented until yet")
+            elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
+                raise NotImplementedError("Negation script is not implemented until yet")
+            elif not self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
+                raise NotImplementedError("Negation script is not implemented until yet")
+            elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
+                selection = random.randint(1, 3+int(other_random_sample is not None))
+                if selection == 1:
+                    threshold = random.randint(2, 7)/10
+                    max_synsets = random.randint(4, 10)
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=wordnet_changes_text(text=self.premise,
+                                                     direction="similar",
+                                                     change_threshold=threshold,
+                                                     maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=wordnet_changes_text(text=self.conclusion,
+                                                        direction="similar",
+                                                        change_threshold=threshold,
+                                                        maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=(1-((changed_parts/10)*max_synsets/10*(1-threshold)))*self.weight
+                    )
+                elif selection == 2:
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=add_prefix(text=self.premise, part="premise")
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=add_prefix(text=self.conclusion, part="conclusion")
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=self.weight
+                    )
+                elif selection == 3:
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=paraphrase(text=self.premise, avoid_equal_return=False,
+                                           maximize_dissimilarity=False, fast=True)
+                        if changed_parts in [1, 3] else self.premise,
+                        conclusion=paraphrase(text=self.conclusion, avoid_equal_return=True,
+                                              maximize_dissimilarity=False)
+                        if changed_parts in [2, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=(.9-((changed_parts-1)/4))*self.weight
+                    )
+                elif selection == 4:
+                    return ValidityNoveltyDataset.Sample(
+                        premise="{} {}".format(self.premise,
+                                               other_random_sample.conclusion
+                                               if isinstance(other_random_sample, ValidityNoveltyDataset.Sample)
+                                               else other_random_sample),
+                        conclusion=self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=self.weight
+                    )
+                else:
+                    raise ValueError("Unexpected mode {}".format(selection))
+            else:
+                raise AttributeError("Unexpected configuration: {}".format(self))
 
         def automatically_create_non_valid_novel_sample(self):
-            raise NotImplementedError()
+            if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
+                raise NotImplementedError("Negation (premise or conclusion) script is not implemented until yet")
+            elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
+                raise NotImplementedError("???")
+            elif not self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
+                if self.novelty >= .8:
+                    threshold = random.randint(2, 7) / 10
+                    max_synsets = random.randint(2, 6)
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=wordnet_changes_text(text=self.premise,
+                                                     direction="similar",
+                                                     change_threshold=threshold,
+                                                     maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=wordnet_changes_text(text=self.conclusion,
+                                                        direction="similar",
+                                                        change_threshold=threshold,
+                                                        maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=(1 - ((changed_parts / 10) * max_synsets / 6 * (1 - threshold))) * self.weight
+                    )
+                else:
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=add_prefix(text=self.premise, part="premise")
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=add_prefix(text=self.conclusion, part="conclusion")
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=self.weight
+                    )
+            elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
+                premise_sents = sent_tokenize(text=self.premise, language="english")
+                if len(premise_sents) == 1:
+                    raise AttributeError("\"{}\" contains too few premises", self.premise)
 
-        def automatically_create_valid_non_novel_sample(self):
-            raise NotImplementedError()
+                return ValidityNoveltyDataset.Sample(
+                    premise=" ".join(premise_sents[:-1]),
+                    conclusion="{} Additionally, {}{}".format(premise_sents[-1], self.conclusion[0].lower(),
+                                                              self.conclusion[1:]),
+                    validity=self.validity or (self.validity*.5),
+                    novelty=1 if self.novelty is None else .6+(self.novelty*.4),
+                    weight=self.weight * .5
+                )
+            else:
+                raise AttributeError("Unexpected configuration: {}".format(self))
 
-        def automatically_create_valid_novel_sample(self):
+        def automatically_create_valid_non_novel_sample(self, other_random_sample: Optional[Any] = None):
+            if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
+                premise = [
+                    self.premise,
+                    paraphrase(text=self.conclusion, avoid_equal_return=False, maximize_dissimilarity=False, fast=True)
+                ]
+                premise[-1] += "." if premise[-1][-1] not in [".", "!", "?"] else ""
+                random.shuffle(premise)
+                return ValidityNoveltyDataset.Sample(
+                    premise="{} {}".format(*premise),
+                    conclusion=self.conclusion,
+                    validity=1,
+                    novelty=0 if any(map(lambda p: p in self.conclusion, premise)) else .1,
+                    weight=self.weight
+                )
+            elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
+                selection = random.randint(1, 3 + int(other_random_sample is not None))
+                if selection == 1:
+                    threshold = random.randint(4, 8) / 10
+                    max_synsets = random.randint(2, 6)
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=wordnet_changes_text(text=self.premise,
+                                                     direction="similar",
+                                                     change_threshold=threshold,
+                                                     maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=wordnet_changes_text(text=self.conclusion,
+                                                        direction="similar",
+                                                        change_threshold=threshold,
+                                                        maximum_synsets_to_fix=max_synsets)
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=(1 - ((changed_parts / 6) * max_synsets / 6 * (1 - threshold))) * self.weight
+                    )
+                elif selection == 2:
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=add_prefix(text=self.premise, part="premise")
+                        if changed_parts in [2, 3] else self.premise,
+                        conclusion=add_prefix(text=self.conclusion, part="conclusion")
+                        if changed_parts in [1, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=self.weight
+                    )
+                elif selection == 3:
+                    changed_parts = random.randint(1, 3)
+                    return ValidityNoveltyDataset.Sample(
+                        premise=paraphrase(text=self.premise, avoid_equal_return=False,
+                                           maximize_dissimilarity=False, fast=True)
+                        if changed_parts in [1, 3] else self.premise,
+                        conclusion=paraphrase(text=self.conclusion, avoid_equal_return=False,
+                                              maximize_dissimilarity=False, fast=True)
+                        if changed_parts in [2, 3] else self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=(.9 - ((changed_parts - 1) / 4)) * self.weight
+                    )
+                elif selection == 4:
+                    return ValidityNoveltyDataset.Sample(
+                        premise="{} Furthermore, {}".format(
+                            self.premise,
+                            other_random_sample.premise
+                            if isinstance(other_random_sample, ValidityNoveltyDataset.Sample)
+                            else other_random_sample),
+                        conclusion=self.conclusion,
+                        validity=self.validity,
+                        novelty=self.novelty,
+                        weight=.9 * self.weight
+                    )
+                else:
+                    raise ValueError("Unexpected mode {}".format(selection))
+            elif not self.is_valid(none_is_not=True):
+                selection = random.randint(1, 2)
+                if selection == 1:
+                    premise = [
+                        self.premise,
+                        paraphrase(text=self.conclusion, avoid_equal_return=False, maximize_dissimilarity=False, fast=True)
+                    ]
+                    premise[-1] += "." if premise[-1][-1] not in [".", "!", "?"] else ""
+                    random.shuffle(premise)
+                    return ValidityNoveltyDataset.Sample(
+                        premise="{} {}".format(*premise),
+                        conclusion=self.conclusion,
+                        validity=1,
+                        novelty=0 if any(map(lambda p: p in self.conclusion, premise)) else .1,
+                        weight=.9 * self.weight
+                    )
+                else:
+                    return ValidityNoveltyDataset.Sample(
+                        premise=self.premise,
+                        conclusion=summarize(text=self.premise),
+                        validity=1,
+                        novelty=.05,
+                        weight=.1+.05*self.weight
+                    )
+            else:
+                raise AttributeError("Unexpected configuration: {}".format(self))
+
+        def automatically_create_valid_novel_sample(self, other_random_sample: Optional[Any] = None):
             raise NotImplementedError()
 
     def __init__(self, samples: Iterable[Sample], tokenizer: PreTrainedTokenizer, max_length: int = 512,
@@ -506,3 +723,54 @@ class ValidityNoveltyDataset(Dataset):
                        len(self.samples_extraction), number)
 
         return self.samples_extraction
+
+    def save(self, path: Optional[Union[Path, str]] = None) -> Path:
+        logger.info("Prepare \"{}\" for saving", self)
+
+        if path is None:
+            logger.trace("No path given...")
+            path: Path = Path("saved_datasets",
+                              self.name.replace("<", "l").replace(">", "g").replace(":", "_").replace("\"", "qq").
+                              replace("/", "_").replace("\\", "_").replace("|", "-").replace("?", " ").
+                              replace("*", " "))
+            logger.debug("Selected path: {}", path)
+        elif isinstance(path, str):
+            logger.trace("We have to convert the path-string to a path-object first!")
+            path = Path(path)
+
+        logger.debug("Let's create the root \"{}\"", path.name)
+
+        path.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Write name \"{}\": {}", self.name,
+                    path.joinpath("name.prop").write_text(data=self.name, encoding="utf8", errors="ignore"))
+        logger.info("Write max_length \"{}\": {}", self.max_length,
+                    path.joinpath("max_length.prop").write_text(data=str(self.max_length),
+                                                                encoding="utf8", errors="ignore"))
+        logger.info("Write tokenizer \"{}\": {}", self.tokenizer.name_or_path,
+                    path.joinpath("tokenizer.prop").write_text(data=self.tokenizer.name_or_path,
+                                                               encoding="utf8", errors="ignore"))
+
+        DataFrame.from_records(
+            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight) for s in self.samples_original],
+            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight"]
+        ).to_csv(
+            path_or_buf=str(path.joinpath("samples_original.csv").absolute()),
+            index=False,
+            encoding="utf8",
+            errors="ignore"
+        )
+
+        DataFrame.from_records(
+            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight) for s in self.samples_extraction],
+            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight"]
+        ).to_csv(
+            path_or_buf=str(path.joinpath("samples_extraction.csv").absolute()),
+            index=False,
+            encoding="utf8",
+            errors="ignore"
+        )
+
+        logger.success("Wrote [{}] files in \"{}\"", ", ".join(map(lambda f: f.name, path.iterdir())), path.name)
+
+        return path
