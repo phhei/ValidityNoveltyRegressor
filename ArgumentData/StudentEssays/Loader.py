@@ -1,13 +1,13 @@
-from typing import Literal, Optional
-from loguru import logger
-import pandas
 import pathlib
+from typing import Optional
 
+import pandas
+from loguru import logger
+from nltk import sent_tokenize
 from transformers import PreTrainedTokenizer
+
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.Utils import truncate_df
-
-from nltk import sent_tokenize
 
 annotation_file = "ArgumentData/StudentEssays/sufficient/annotations.csv"
 main_file = "ArgumentData/StudentEssays/sufficient/all-samples.tsv"
@@ -49,6 +49,7 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
     samples = []
 
     for sid, row in main_df.iterrows():
+        # noinspection PyUnresolvedReferences
         essay_number = sid[0]
 
         logger.trace("Processing sample \"{}\" -- essay number {}", sid, essay_number)

@@ -73,8 +73,11 @@ if __name__ == "__main__":
     argv.add_argument("-s", "--sample", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="Rescale the training data - You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
-    argv.add_argument("-skip", "--skip_training", action="store_true", default=False,  required=False)
-    argv.add_argument("--save", action="store", nargs="?", type=str, default="n/a", required=False)
+    argv.add_argument("-skip", "--skip_training", action="store_true", default=False,  required=False,
+                      help="If you want to skip the training (directly to testing), take this argument!")
+    argv.add_argument("--save", action="store", nargs="?", type=str, default="n/a", required=False,
+                      help="Saves the used/ produced data. You can exclude the neural model by specifying this "
+                           "argument by \"no-model\" or the avoiding the dataset by \"no-dataset\"")
     argv.add_argument("--analyse", action="store", nargs="*", type=str, default=["test"], required=False,
                       help="You want to have a depth analysis of your data before training/ testing on it? "
                            "Please define the split(s) here.")
@@ -85,7 +88,7 @@ if __name__ == "__main__":
     tokenizer = transformers.RobertaTokenizer.from_pretrained(args.transformer)
 
     train = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Train")
-    evaluation = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
+    dev = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
     test = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Test")
 
     if args.use_ExplaGraphs != "n/a":
@@ -248,7 +251,7 @@ if __name__ == "__main__":
             ds = load_valtest(split="dev", tokenizer=tokenizer)
             if args.use_ValForTrain:
                 train += ds
-            evaluation += ds
+            dev += ds
             test += load_valtest(split="test", tokenizer=tokenizer)
         else:
             arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
@@ -274,7 +277,7 @@ if __name__ == "__main__":
             )
             if args.use_ValForTrain:
                 train += ds
-            evaluation += ds
+            dev += ds
             test += load_valtest(
                 split="test", tokenizer=tokenizer,
                 max_length_sample=parsed_args_ValTest.max_length_sample,
@@ -306,8 +309,10 @@ if __name__ == "__main__":
             arg_sample = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
             arg_sample.add_argument("-n", "--number", action="store", type=int, required=False)
             arg_sample.add_argument("-f", "--fraction", action="store", type=float, required=False)
-            arg_sample.add_argument("--not_forced_balanced_dataset", action="store_false", default=True,
-                                    required=False)
+            arg_sample.add_argument("--classes", action="store", nargs="*", default="n/a", required=False)
+            arg_sample.add_argument("--not_forced_balanced_dataset", action="store_false", default=True, required=False)
+            arg_sample.add_argument("--automatic_samples", action="store_true",
+                                    default=args.generate_more_training_samples, required=False)
 
             parsed_args_sample = arg_sample.parse_args(
                 args.sample[1:].split("#") if args.sample.startswith("#") else args.sample.split("#")
@@ -316,14 +321,21 @@ if __name__ == "__main__":
                 number_or_fraction=parsed_args_sample.number if parsed_args_sample.number is not None else
                 (parsed_args_sample.fraction if parsed_args_sample.fraction is not None else 1.),
                 forced_balanced_dataset=parsed_args_sample.not_forced_balanced_dataset,
-                allow_automatically_created_samples=args.generate_more_training_samples or
-                                                    (parsed_args_sample.fraction is not None and parsed_args_sample.fraction >= 1)
+                force_classes=parsed_args_sample.not_forced_balanced_dataset
+                if parsed_args_sample.classes == "n/a" else
+                (True if len(parsed_args_sample.classes) == 0 else
+                 [(int(parsed_args_sample.classes[i]) if parsed_args_sample.classes[i].lstrip(" -+").isdigit()
+                   else parsed_args_sample.classes[i],
+                   int(parsed_args_sample.classes[i+1]) if parsed_args_sample.classes[i+1].lstrip(" -+").isdigit()
+                   else parsed_args_sample.classes[i+1])
+                  for i in range(0, len(parsed_args_sample.classes)-1, 2)]),
+                allow_automatically_created_samples=parsed_args_sample.automatic_samples
             )
 
         logger.trace("Final training-samples: {}", " +++ ".join(map(lambda t: str(t), final_train_samples)))
 
     logger.info("To summarize, you have {} training data, {} validation data and {} test data", len(train),
-                len(evaluation), len(test))
+                len(dev), len(test))
     if not args.skip_training and len(train) == 0:
         logger.warning("You want to train without training data! Please explicit define some with your parameters!")
 
@@ -342,14 +354,20 @@ if __name__ == "__main__":
         logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.save != "n/a" and args.save != "no-dataset":
+        logger.debug("You want to save the dataset")
+        train.save(path=output_dir.joinpath("_train"))
+        dev.save(path=output_dir.joinpath("_dev"))
+        test.save(path=output_dir.joinpath("_test"))
+
     if (isinstance(args.analyse, str) and args.analyse == "train") or "train" in args.analyse:
         train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
                                   save_heatmaps=str(output_dir.joinpath("train_analyse.png").absolute()))
     if (isinstance(args.analyse, str) and (args.analyse.startswith("dev") or args.analyse.startswith("val"))) \
             or "dev" in args.analyse or "development" in args.analyse \
             or "val" in args.analyse or "validation" in args.analyse:
-        evaluation.depth_analysis_data(show_heatmaps=False,
-                                       save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
+        dev.depth_analysis_data(show_heatmaps=False,
+                                save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
     if (isinstance(args.analyse, str) and args.analyse == "test") or "test" in args.analyse:
         test.depth_analysis_data(show_heatmaps=False,
                                  save_heatmaps=str(output_dir.joinpath("test_analyse.png").absolute()))
@@ -385,7 +403,7 @@ if __name__ == "__main__":
             gradient_checkpointing=args.save_memory_training
         ),
         train_dataset=train,
-        eval_dataset=None if len(evaluation) == 0 else evaluation,
+        eval_dataset=None if len(dev) == 0 else dev,
         compute_metrics=val_nov_metric,
         callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=2, early_stopping_threshold=.01)]
     )
@@ -423,21 +441,20 @@ if __name__ == "__main__":
                                                 pformat(test_metrics, indent=2, compact=False))
         trainer.save_metrics(split="test", metrics=test_metrics)
 
-    if args.save != "n/a":
-        logger.debug("You want to save the model to {}", args.save)
+    if args.save != "n/a" and args.save != "no-model":
+        logger.debug("You want to save the model")
         try:
-            trainer.save_model(output_dir=args.save if args.save is not None else None)
-            logger.success("Successfully stored the model in: {}",
-                           Path(args.save).absolute() if args.save is not None else output_dir)
+            trainer.save_model()
+            logger.success("Successfully stored the model in: {}", output_dir)
         except Exception:
-            logger.opt(exception=True).error("Can't save to {}", args.save)
+            logger.opt(exception=True).error("Can't save to {}", output_dir.absolute())
 
     try:
         info_code = output_dir.joinpath("sys-args.txt").write_text(
             data="Run from {} with following inputs args:\n{}\n\n Train-data:{}/Dev-data:{}/Test-data:{}".format(
                 datetime.datetime.now().isoformat(),
                 "\n".join(sys.argv[1:]) if len(sys.argv) >= 2 else "no input args",
-                train, evaluation, test
+                train, dev, test
             ),
             encoding="utf-8",
             errors="ignore"

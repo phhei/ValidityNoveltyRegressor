@@ -4,7 +4,8 @@ from typing import Dict, Optional, Tuple, Literal
 import torch
 import numpy
 
-from transformers import Trainer, PreTrainedModel, RobertaForSequenceClassification, BatchEncoding, RobertaConfig, EvalPrediction
+from transformers import Trainer, PreTrainedModel, RobertaForSequenceClassification, BatchEncoding, RobertaConfig, \
+    EvalPrediction
 from transformers.modeling_outputs import SequenceClassifierOutput, BaseModelOutput
 from loguru import logger
 
@@ -85,6 +86,7 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
     }
 
 
+# noinspection PyMethodMayBeStatic
 class ValNovTrainer(Trainer):
     def compute_loss(self, model: PreTrainedModel, inputs: Dict[str, torch.Tensor], return_outputs=False):
         try:
