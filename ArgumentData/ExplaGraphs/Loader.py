@@ -1,4 +1,5 @@
-from typing import Literal, Optional, Union
+import math
+from typing import Literal, Optional, Union, List, Tuple
 from loguru import logger
 import pandas
 import itertools
@@ -7,6 +8,8 @@ from transformers import PreTrainedTokenizer
 from functools import reduce
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.Utils import truncate_df
+
+from nltk import word_tokenize
 
 dev_path = "ArgumentData/ExplaGraphs/dev.tsv"
 train_path = "ArgumentData/ExplaGraphs/train.tsv"
@@ -32,27 +35,43 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
     for sid, row_data in data.iterrows():
         logger.debug("Process sample {} now", sid)
 
-        graph = [tuple([node.strip("() ") for node in edge.split(";")])
-                 for edge in row_data["ExplaGraph"].split(")(")]
+        graph: List[Tuple[str, str, str]] = [tuple([node.strip("() ") for node in edge.split(";")])
+                                             for edge in row_data["ExplaGraph"].split(")(")]
         logger.trace("{} -{}-> {}{}",
                      row_data["Premise"],
                      row_data["ExplaGraph"],
                      "NOT: " if row_data["Stance"] == "counter" else "",
                      row_data["Conclusion"])
 
+        try:
+            grams_premise: List[str] = [t.lower() for t in word_tokenize(text=row_data["Premise"], language="english")]
+            grams_conclusion: List[str] = \
+                [t.lower() for t in word_tokenize(text=row_data["Conclusion"], language="english")]
+        except LookupError:
+            logger.opt(exception=True).warning("Can't clever tokenize the premise/ conclusion, just split them by "
+                                               "detecting white-spaces")
+            grams_premise: List[str] = [t.lower() for t in str(row_data["Premise"]).split(sep=" ")]
+            grams_conclusion: List[str] = [t.lower() for t in str(row_data["Conclusion"]).split(sep=" ")]
+        logger.trace("Premise contains {} tokens and conclusion {} tokens", len(grams_premise), len(grams_conclusion))
+        grams_premise.extend([" ".join(grams_premise[i:i+2]) for i in range(0, len(grams_premise)-1)] +
+                             [" ".join(grams_premise[i:i+3]) for i in range(0, len(grams_premise)-2)])
+        grams_conclusion.extend([" ".join(grams_conclusion[i:i+2]) for i in range(0, len(grams_conclusion)-1)] +
+                                [" ".join(grams_conclusion[i:i+3]) for i in range(0, len(grams_conclusion)-2)])
+
         edges_connecting_premise_conclusion = \
             [edge for edge in graph if edge[0] in row_data["Premise"] and edge[2] in row_data["Conclusion"]]
         common_sense_nodes = {source for source, _, _ in graph
-                              if source not in row_data["Premise"] and source not in row_data["Conclusion"]}
+                              if source.lower() not in grams_premise and source.lower() not in grams_conclusion}
         common_sense_nodes.update(
             {sink for _, _, sink in graph
-             if sink not in row_data["Premise"] and sink not in row_data["Conclusion"]}
+             if sink.lower() not in grams_premise and sink.lower() not in grams_conclusion}
         )
         edges_containing_common_sense = [edge for edge in graph
-                                         if edge[0] not in row_data["Premise"] or
-                                         edge[2] not in row_data["Conclusion"]]
+                                         if edge[0].lower() not in grams_premise or
+                                         edge[2].lower() not in grams_conclusion]
         edges_only_common_sense = [edge for edge in graph
-                                   if edge[0] not in row_data["Premise"] and edge[2] not in row_data["Conclusion"]]
+                                   if edge[0].lower() not in grams_premise and
+                                   edge[2].lower() not in grams_conclusion]
         logger.trace("Graph containing {} edges ({} common-sense nodes: {})",
                      len(graph), len(common_sense_nodes), common_sense_nodes)
 
@@ -93,7 +112,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
             validity_adjustment_multiplicative = 0
             logger.warning("Unexpected stance-label \"{}\" at sample {}", row_data["Stance"], sid)
 
-        if len(common_sense_nodes) == 0 and len(traversals) == 0:
+        if len(common_sense_nodes) == 0 and len(graph) == 1:
             novelty = 0
             novelty_adjustment_multiplicative = general_val_nov_adjustment_multiplicative
 
@@ -106,10 +125,10 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
             (.5*len(common_sense_nodes)/len(graph) +
              .5*int(graph_is_easy_to_undermine))
         novelty_corrective = max(0,
-                                 .33*(len(graph)-len(common_sense_nodes))/len(graph) +
-                                 .33*(len(graph)-len(edges_only_common_sense)-2) +
-                                 .33*(len(graph)-max([0] + list(map(lambda l: len(l), traversals)))) -
-                                 .1*len(graph)/7)
+                                 .4*(len(graph)-len(common_sense_nodes))/len(graph) +
+                                 .4*(len(graph)-len(edges_only_common_sense)-2)/len(graph) +
+                                 .4*(len(graph)-max([0] + list(map(lambda l: len(l), traversals))))/len(graph) -
+                                 novelty * (.1*len(graph)/7 + .1*math.log10(len(grams_conclusion))))
 
         weight = 2-.8*int(graph_is_easy_to_undermine)-.2*int(graph_is_linear) if continuous_sample_weight else 2
 
@@ -120,7 +139,8 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
             conclusion=conclusion,
             validity=validity+validity_adjustment_multiplicative*validity_corrective,
             novelty=novelty+novelty_adjustment_multiplicative*novelty_corrective,
-            weight=weight
+            weight=weight,
+            source="ExplaGraphs[Argument-->Belief]"
         ))
 
         logger.debug("Successfully added a sample for row {}: {}", sid, samples[-1])
@@ -130,10 +150,11 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
             logger.trace("We have to create a nonsense-sample for row {}, too", sid)
             samples.append(ValidityNoveltyDataset.Sample(
                 premise=premise,
-                conclusion=data["Conclusion"].sample(n=1, random_state=2001).iloc[0],
+                conclusion=data["Conclusion"].sample(n=1, random_state=hash(sid)).iloc[0],
                 validity=0,
                 novelty=0,
-                weight=.5 if continuous_sample_weight else 2
+                weight=.5 if continuous_sample_weight else 2,
+                source="ExplaGrpahs[Argument-->RandomBelief]"
             ))
             logger.debug("Nonsense-sample generated: {}", samples[-1])
 

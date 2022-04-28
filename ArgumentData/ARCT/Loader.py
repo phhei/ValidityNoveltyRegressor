@@ -91,7 +91,8 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                     conclusion=row_data["claim"],
                     validity=1,
                     novelty=(.5 if include_topic else .85) if continuous_val_nov else 1,
-                    weight=weight_ref
+                    weight=weight_ref,
+                    source="ARCT[Reason+rightWarrant->Conclusion]"
                 )
             )
             logger.trace("Added a ARCT-sample: {}", samples[-1])
@@ -107,7 +108,8 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                     conclusion=row_data["claim"],
                     validity=.05 if continuous_val_nov else 0,
                     novelty=(.5 if include_topic else .85) if continuous_val_nov else 1,
-                    weight=weight_ref
+                    weight=weight_ref,
+                    source="ARCT[Reason+wrongWarrant->Conclusion]"
                 )
             )
             logger.trace("Added a false-warrant-ARCT-sample: {}", samples[-1])
@@ -124,7 +126,8 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                         conclusion=row_data["warrant1"],
                         validity=0,
                         novelty=.05 if continuous_val_nov else 0,
-                        weight=weight_ref*(.8 if continuous_sample_weight else 1)
+                        weight=weight_ref*(.8 if continuous_sample_weight else 1),
+                        source="ARCT[Reason+Warrant0->Warrant1]"
                     )
                 )
                 samples.append(
@@ -137,7 +140,8 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                         conclusion=row_data["warrant0"],
                         validity=0,
                         novelty=.05 if continuous_val_nov else 0,
-                        weight=weight_ref*(.8 if continuous_sample_weight else 1)
+                        weight=weight_ref*(.8 if continuous_sample_weight else 1),
+                        source="ARCT[Reason+Warrant1->Warrant0]"
                     )
                 )
                 samples.append(
@@ -150,7 +154,8 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                         conclusion=claim_map_df.loc[row_data["claim"]]["negated"],
                         validity=0,
                         novelty=.05 if continuous_val_nov else 0,
-                        weight=weight_ref
+                        weight=weight_ref,
+                        source="ARCT[Reason+Conclusion->NegatedConclusion]"
                     )
                 )
             except KeyError:

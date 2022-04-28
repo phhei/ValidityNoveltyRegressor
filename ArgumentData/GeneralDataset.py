@@ -24,13 +24,13 @@ from HGTrainer import _val_nov_metric
 class ValidityNoveltyDataset(Dataset):
     class Sample:
         def __init__(self, premise: str, conclusion: str, validity: Optional[float] = None,
-                     novelty: Optional[float] = None, weight: float = 1.):
-            #TODO add source (where a sample comes from...)
+                     novelty: Optional[float] = None, weight: float = 1., source: str = "unknown"):
             self.premise: str = premise
             self.conclusion = conclusion
             self.validity: Optional[float] = min(1, max(0, validity)) if validity is not None else validity
             self.novelty: Optional[float] = min(1, max(0, novelty)) if novelty is not None else novelty
             self.weight: float = weight
+            self.source = source
 
         def __str__(self) -> str:
             return "{}-->{} ({}/{})".format(
@@ -79,7 +79,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=(1-((changed_parts/10)*max_synsets/10*(1-threshold)))*self.weight
+                        weight=(1-((changed_parts/10)*max_synsets/10*(1-threshold)))*self.weight,
+                        source="{}#{}".format(self.source, "WordNet-Similar>{}".format(threshold))
                     )
                 elif selection == 2:
                     changed_parts = random.randint(1, 3)
@@ -90,7 +91,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=self.weight
+                        weight=self.weight,
+                        source="{}#{}".format(self.source, "prefix added")
                     )
                 elif selection == 3:
                     changed_parts = random.randint(1, 3) if len(self.premise) <= 50 else 2
@@ -103,7 +105,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [2, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=(.9-((changed_parts-1)/4))*self.weight
+                        weight=(.9-((changed_parts-1)/4))*self.weight,
+                        source="{}#{}".format(self.source, "paraphrased")
                     )
                 elif selection == 4:
                     return ValidityNoveltyDataset.Sample(
@@ -114,7 +117,8 @@ class ValidityNoveltyDataset(Dataset):
                         conclusion=self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=self.weight
+                        weight=self.weight,
+                        source="{}#{}".format(self.source, "random conclusion to premise added")
                     )
                 else:
                     raise ValueError("Unexpected mode {}".format(selection))
@@ -144,7 +148,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=(1 - ((changed_parts / 10) * max_synsets / 6 * (1 - threshold))) * self.weight
+                        weight=(1 - ((changed_parts / 10) * max_synsets / 6 * (1 - threshold))) * self.weight,
+                        source="{}#{}".format(self.source, "WordNet-Similar>{}".format(threshold))
                     )
                 else:
                     changed_parts = random.randint(1, 3)
@@ -155,7 +160,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=self.weight
+                        weight=self.weight,
+                        source="{}#{}".format(self.source, "prefix added")
                     )
             elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
                 premise_sents = sent_tokenize(text=self.premise, language="english")
@@ -168,7 +174,8 @@ class ValidityNoveltyDataset(Dataset):
                                                               self.conclusion[1:]),
                     validity=self.validity or (self.validity*.5),
                     novelty=1 if self.novelty is None else .6+(self.novelty*.4),
-                    weight=self.weight * .5
+                    weight=self.weight * .5,
+                    source="{}#{}".format(self.source, "Premise-Sentence-Shift")
                 )
             else:
                 raise AttributeError("Unexpected configuration: {}".format(self))
@@ -186,7 +193,8 @@ class ValidityNoveltyDataset(Dataset):
                     conclusion=self.conclusion,
                     validity=1,
                     novelty=0 if any(map(lambda p: p in self.conclusion, premise)) else .1,
-                    weight=self.weight
+                    weight=self.weight,
+                    source="{}#{}".format(self.source, "paraphrased conclusion to premise added")
                 )
             elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
                 selection = random.randint(1, 3 + int(other_random_sample is not None))
@@ -207,7 +215,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=(1 - ((changed_parts / 6) * max_synsets / 6 * (1 - threshold))) * self.weight
+                        weight=(1 - ((changed_parts / 6) * max_synsets / 6 * (1 - threshold))) * self.weight,
+                        source="{}#{}".format(self.source, "WordNet-Similar>{}".format(threshold))
                     )
                 elif selection == 2:
                     changed_parts = random.randint(1, 3)
@@ -218,7 +227,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=self.weight
+                        weight=self.weight,
+                        source="{}#{}".format(self.source, "prefix added")
                     )
                 elif selection == 3:
                     changed_parts = random.randint(1, 3) if len(self.premise) <= 50 else 2
@@ -231,7 +241,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [2, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=(.9 - ((changed_parts - 1) / 4)) * self.weight
+                        weight=(.9 - ((changed_parts - 1) / 4)) * self.weight,
+                        source="{}#{}".format(self.source, "paraphrased")
                     )
                 elif selection == 4:
                     return ValidityNoveltyDataset.Sample(
@@ -243,7 +254,8 @@ class ValidityNoveltyDataset(Dataset):
                         conclusion=self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=.9 * self.weight
+                        weight=.9 * self.weight,
+                        source="{}#{}".format(self.source, "random premise to premise added")
                     )
                 else:
                     raise ValueError("Unexpected mode {}".format(selection))
@@ -262,7 +274,8 @@ class ValidityNoveltyDataset(Dataset):
                         conclusion=self.conclusion,
                         validity=1,
                         novelty=0 if any(map(lambda p: p in self.conclusion, premise)) else .1,
-                        weight=.9 * self.weight
+                        weight=.9 * self.weight,
+                        source="{}#{}".format(self.source, "paraphrased conclusion to premise added")
                     )
                 else:
                     return ValidityNoveltyDataset.Sample(
@@ -270,7 +283,8 @@ class ValidityNoveltyDataset(Dataset):
                         conclusion=summarize(text=self.premise),
                         validity=1,
                         novelty=.05,
-                        weight=.1+.05*self.weight
+                        weight=.1+.05*self.weight,
+                        source="{}#{}".format(self.source, "conclusion := summarized premise")
                     )
             else:
                 raise AttributeError("Unexpected configuration: {}".format(self))
@@ -291,7 +305,8 @@ class ValidityNoveltyDataset(Dataset):
                         else remove_non_content_words_manipulate_punctuation(self.conclusion),
                         validity=max(.5, self.validity*0.95) if conclusion != self.conclusion else self.validity,
                         novelty=min(1, self.novelty*1.05) if conclusion != self.conclusion else self.novelty,
-                        weight=(1-.5*(max_synsets/8*(1-threshold)))*self.weight
+                        weight=(1-.5*(max_synsets/8*(1-threshold)))*self.weight,
+                        source="{}#{}".format(self.source, "WordNet-Hypernym>{}".format(threshold))
                     )
                 elif selection == 2:
                     changed_parts = random.randint(1, 3)
@@ -302,7 +317,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=self.validity,
                         novelty=self.novelty,
-                        weight=self.weight
+                        weight=self.weight,
+                        source="{}#{}".format(self.source, "prefix added")
                     )
                 elif selection == 3:
                     changed_parts = random.randint(1, 3)
@@ -313,7 +329,8 @@ class ValidityNoveltyDataset(Dataset):
                         if changed_parts in [1, 3] else self.conclusion,
                         validity=max(.5, self.validity*.99),
                         novelty=self.novelty,
-                        weight=(1-changed_parts/9)*self.weight
+                        weight=(1-changed_parts/9)*self.weight,
+                        source="{}#{}".format(self.source, "fill-words removed")
                     )
                 else:
                     raise ValueError("Unexpected mode {}".format(selection))
@@ -674,11 +691,30 @@ class ValidityNoveltyDataset(Dataset):
                                  minimum_number,
                                  _count)
                     still_needed = minimum_number - _count
+
+                    samples_extraction_without_unknown = \
+                        self.samples_extraction if len(
+                            filtered := [sample for sample in self.samples_extraction
+                                         if sample.validity is not None and sample.novelty is not None]
+                        ) < 3 else filtered
+                    samples_extraction_validity_unknown = \
+                        self.samples_extraction if len(
+                            filtered := [sample for sample in self.samples_extraction
+                                         if sample.validity is None and sample.novelty is not None]
+                        ) < 3 else filtered
+                    samples_extraction_novelty_unknown = \
+                        self.samples_extraction if len(
+                            filtered := [sample for sample in self.samples_extraction
+                                         if sample.validity is not None and sample.novelty is None]
+                        ) < 3 else filtered
+
                     if allow_automatically_created_samples:
                         while still_needed > 0:
                             try:
-                                stem = random.choice(self.samples_extraction)
-                                #TODO avoid unknown stems...
+                                stem = random.choice(samples_extraction_validity_unknown
+                                                     if validity == 0 else
+                                                     (samples_extraction_novelty_unknown
+                                                      if novelty == 0 else samples_extraction_without_unknown))
                                 logger.trace("OK, trying to make something out of: {}", stem)
                                 if validity == 1 and novelty == 1:
                                     self.samples_extraction.append(stem.automatically_create_valid_novel_sample())
@@ -692,7 +728,8 @@ class ValidityNoveltyDataset(Dataset):
                                         conclusion=_stem.conclusion,
                                         validity=_stem.validity,
                                         novelty=None,
-                                        weight=_stem.weight
+                                        weight=_stem.weight,
+                                        source=_stem.source
                                     ))
                                 elif validity == 1 and novelty == -1:
                                     self.samples_extraction.append(stem.automatically_create_valid_non_novel_sample(
@@ -706,7 +743,8 @@ class ValidityNoveltyDataset(Dataset):
                                         conclusion=_stem.conclusion,
                                         validity=None,
                                         novelty=_stem.novelty,
-                                        weight=_stem.weight
+                                        weight=_stem.weight,
+                                        source=_stem.source
                                     ))
                                 elif validity == 0 and novelty == 0:
                                     logger.warning("Generating a sample without known validity and novelty "
@@ -716,10 +754,12 @@ class ValidityNoveltyDataset(Dataset):
                                         conclusion=stem.conclusion,
                                         validity=None,
                                         novelty=None,
-                                        weight=1e-4
+                                        weight=1e-4,
+                                        source=stem.source
                                     ))
                                 elif validity == 0 and novelty == -1:
-                                    _stem = stem if not stem.is_novel(none_is_not=True) and stem.validity is not None else \
+                                    _stem = stem if not stem.is_novel(none_is_not=True) \
+                                                    and stem.validity is not None else \
                                         stem.automatically_create_non_valid_non_novel_sample(
                                             other_random_sample=random.choice(self.samples_original)
                                         )
@@ -728,12 +768,14 @@ class ValidityNoveltyDataset(Dataset):
                                         conclusion=_stem.conclusion,
                                         validity=None,
                                         novelty=_stem.novelty,
-                                        weight=_stem.weight
+                                        weight=_stem.weight,
+                                        source=_stem.source
                                     ))
                                 elif validity == -1 and novelty == 1:
                                     self.samples_extraction.append(stem.automatically_create_non_valid_novel_sample())
                                 elif validity == -1 and novelty == 0:
-                                    _stem = stem if not stem.is_valid(none_is_not=True) and stem.novelty is not None else \
+                                    _stem = stem if not stem.is_valid(none_is_not=True) \
+                                                    and stem.novelty is not None else \
                                         stem.automatically_create_non_valid_non_novel_sample(
                                             other_random_sample=random.choice(self.samples_original)
                                         )
@@ -742,7 +784,8 @@ class ValidityNoveltyDataset(Dataset):
                                         conclusion=_stem.conclusion,
                                         validity=_stem.validity,
                                         novelty=None,
-                                        weight=_stem.weight
+                                        weight=_stem.weight,
+                                        source=_stem.source
                                     ))
                                 elif validity == -1 and novelty == -1:
                                     self.samples_extraction.append(stem.automatically_create_non_valid_non_novel_sample(
@@ -760,15 +803,15 @@ class ValidityNoveltyDataset(Dataset):
                                        "valid" if validity == 1 else ("not valid" if validity == -1 else "?valid?"),
                                        "novel" if novelty == 1 else ("not novel" if novelty == -1 else "?novel?"))
                     else:
-                        useful_samples = [s for s in self.samples_original
-                                          if s not in self.samples_extraction and
-                                          ((s.is_valid(none_is_not=True) and validity == 1) or
-                                           (s.validity is None and validity == 0) or
-                                           (not s.is_valid(none_is_not=True) and s.validity is not None and
+                        useful_samples = [sample for sample in self.samples_original
+                                          if sample not in self.samples_extraction and
+                                          ((sample.is_valid(none_is_not=True) and validity == 1) or
+                                           (sample.validity is None and validity == 0) or
+                                           (not sample.is_valid(none_is_not=True) and sample.validity is not None and
                                             validity == -1)) and
-                                          ((s.is_novel(none_is_not=True) and novelty == 1) or
-                                           (s.novelty is None and novelty == 0) or
-                                           (not s.is_novel(none_is_not=True) and s.novelty is not None and
+                                          ((sample.is_novel(none_is_not=True) and novelty == 1) or
+                                           (sample.novelty is None and novelty == 0) or
+                                           (not sample.is_novel(none_is_not=True) and sample.novelty is not None and
                                             novelty == -1))]
 
                         if len(useful_samples) < still_needed:
@@ -793,30 +836,40 @@ class ValidityNoveltyDataset(Dataset):
                                 "valid" if validity == 1 else ("non-valid" if validity == -1 else ""),
                                 "novel" if novelty == 1 else ("non-novel" if novelty == -1 else ""),
                                 _count, maximum_number)
-                    used_samples = [s for s in self.samples_extraction if
-                                    ((s.is_valid(none_is_not=True) and validity == 1) or
-                                     (s.validity is None and validity == 0) or
-                                     (not s.is_valid(none_is_not=True) and s.validity is not None and
+                    used_samples = [sample for sample in self.samples_extraction if
+                                    ((sample.is_valid(none_is_not=True) and validity == 1) or
+                                     (sample.validity is None and validity == 0) or
+                                     (not sample.is_valid(none_is_not=True) and sample.validity is not None and
                                       validity == -1)) and
-                                    ((s.is_novel(none_is_not=True) and novelty == 1) or
-                                     (s.novelty is None and novelty == 0) or
-                                     (not s.is_novel(none_is_not=True) and s.novelty is not None and novelty == -1))]
+                                    ((sample.is_novel(none_is_not=True) and novelty == 1) or
+                                     (sample.novelty is None and novelty == 0) or
+                                     (not sample.is_novel(none_is_not=True) and sample.novelty is not None
+                                      and novelty == -1))]
                     remove_samples = random.sample(used_samples, k=_count-maximum_number)
                     logger.trace("Remove following samples: {}", remove_samples)
-                    for s in remove_samples:
+                    for rem_sample in remove_samples:
                         try:
-                            self.samples_extraction.remove(s)
+                            self.samples_extraction.remove(rem_sample)
                         except ValueError:
-                            logger.opt(exception=True).warning("We cannot remove {}", s)
+                            logger.opt(exception=True).warning("We cannot remove {}", rem_sample)
             logger.success("Closed all {} cases of forcing sample balance ({}-{}). "
                            "Be beware: we only manipulate the extraction-part of the dataset, "
                            "not the original data ({})",
                            len(force_classes_set), minimum_number, maximum_number,
                            len(self.samples_extraction), len(self.samples_original))
 
-        number = min(number_or_fraction, len(self.samples_original)) \
-            if isinstance(number_or_fraction, int) else min(len(self.samples_original),
-                                                            round(number_or_fraction*len(self.samples_original)))
+        number = number_or_fraction if isinstance(number_or_fraction, int) else \
+            round(number_or_fraction*len(self.samples_original))
+        if number > len(self.samples_original):
+            if allow_automatically_created_samples:
+                logger.debug("You want to have more samples than you have in your database: {} vs. {}. "
+                             "This will force automatically created samples!",
+                             number, len(self.samples_original))
+            else:
+                logger.warning("You want to sample more samples ({}) than you have ({}) - this is not possible "
+                               "without additional sample creations which you've deactivated!",
+                               number, len(self.samples_original))
+                number = len(self.samples_original)
 
         if number == len(self.samples_original) and not forced_balanced_dataset:
             logger.warning("You want to reset your dataset to the original data ({}->{} samples)",
@@ -865,13 +918,13 @@ class ValidityNoveltyDataset(Dataset):
                      not_chosen_class_set)
 
         samples_in_not_chosen_set = reduce(lambda l1, l2: l1+l2, map(
-            lambda cc: [s for s in self.samples_extraction if
-                        ((s.is_valid(none_is_not=True) and cc[0] == 1) or
-                         (s.validity is None and cc[0] == 0) or
-                         (not s.is_valid(none_is_not=True) and s.validity is not None and cc[0] == -1)) and
-                        ((s.is_novel(none_is_not=True) and cc[1] == 1) or
-                         (s.novelty is None and cc[1] == 0) or
-                         (not s.is_novel(none_is_not=True) and s.novelty is not None and cc[1] == -1))],
+            lambda cc: [sample for sample in self.samples_extraction if
+                        ((sample.is_valid(none_is_not=True) and cc[0] == 1) or
+                         (sample.validity is None and cc[0] == 0) or
+                         (not sample.is_valid(none_is_not=True) and sample.validity is not None and cc[0] == -1)) and
+                        ((sample.is_novel(none_is_not=True) and cc[1] == 1) or
+                         (sample.novelty is None and cc[1] == 0) or
+                         (not sample.is_novel(none_is_not=True) and sample.novelty is not None and cc[1] == -1))],
             not_chosen_class_set
         ))
         logger.debug("Having {} samples matching non of the classes which should be equally distributed",
@@ -932,8 +985,9 @@ class ValidityNoveltyDataset(Dataset):
         )
 
         DataFrame.from_records(
-            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight) for s in self.samples_extraction],
-            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight"]
+            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight, s.source)
+                  for s in self.samples_extraction],
+            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight", "Source"]
         ).to_csv(
             path_or_buf=str(path.joinpath("samples_extraction.csv").absolute()),
             index=False,

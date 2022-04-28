@@ -182,7 +182,7 @@ def add_prefix(text: str, part: Literal["undefined", "premise", "conclusion"] = 
             text[1:]
         )
     elif part == "conclusion":
-        return "{} {} {}".format(
+        return "{} {}{}".format(
             random.choice(["Therefore,", "Hence,", "To conclude,"]),
             text[0].lower(),
             text[1:]

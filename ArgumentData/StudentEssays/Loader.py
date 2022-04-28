@@ -89,7 +89,8 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
                     else ((row["A1"]+row["A2"]+row["A3"])/3),
                     novelty=None,
                     weight=.5+(int(pandas.notna(row["A1"]))+int(pandas.notna(row["A2"]))+int(pandas.notna(row["A3"])))/3
-                    if continuous_sample_weight else .75
+                    if continuous_sample_weight else .75,
+                    source="StudentEssays[]"
                 ))
                 logger.trace("Produced a new sample: {}", samples[-1])
             else:

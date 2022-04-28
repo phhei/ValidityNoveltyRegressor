@@ -84,7 +84,8 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
                 conclusion=row_data["conclusion_text"],
                 validity=validity,
                 novelty=novelty,
-                weight=weight
+                weight=weight,
+                source="ValNovOwnData[Premise-->Conclusion]"
             ))
             logger.debug("Added sample: {}", samples[-1])
             if continuous_val_nov:

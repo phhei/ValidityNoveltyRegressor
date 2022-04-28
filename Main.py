@@ -17,7 +17,7 @@ from loguru import logger
 import transformers
 import argparse
 
-VERSION: str = "V0.1"
+VERSION: str = "V0.1.2"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -120,7 +120,8 @@ if __name__ == "__main__":
                 max_length_sample=parsed_args_explagraphs.max_length_sample,
                 max_number=parsed_args_explagraphs.max_number,
                 generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
-                continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else parsed_args_explagraphs.continuous_val_nov,
+                continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
+                parsed_args_explagraphs.continuous_val_nov,
                 continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
             )
 
@@ -235,8 +236,7 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 max_length_sample=parsed_args_essays.max_length_sample,
                 max_number=parsed_args_essays.max_number,
-                exclude_samples_without_detail_annotation_info=
-                parsed_args_essays.include_samples_without_detail_annotation_info,
+                exclude_samples_without_detail_annotation_info=parsed_args_essays.include_samples_without_detail_annotation_info,
                 continuous_val_nov=parsed_args_essays.continuous_val_nov,
                 continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
             )

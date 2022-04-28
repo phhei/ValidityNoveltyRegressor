@@ -44,8 +44,10 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
                 premise="{}{}".format("{}: ".format(row["topic"]) if include_topic else "", row["premise"]),
                 conclusion=row["claim"],
                 validity=.75 + .25*row["mace_ibm"] if continuous_val_nov else 1,
-                novelty=0 if (row["claim"] in row["premise"]) else (.8+.1*row["mace_ibm"] if continuous_val_nov else 1),
-                weight=row["mace_ibm"] if continuous_sample_weight else 1
+                novelty=0 if str(row["claim"]).lower() in str(row["premise"]).lower() else
+                (.8+.1*row["mace_ibm"] if continuous_val_nov else 1),
+                weight=row["mace_ibm"] if continuous_sample_weight else 1,
+                source="ARCTUKW[Premise->Conclusion]"
             ))
 
             samples.append(ValidityNoveltyDataset.Sample(
@@ -55,8 +57,10 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
                 ),
                 conclusion=row["claim"],
                 validity=.75 + .25 * row["mace_ibm"] if continuous_val_nov else 1,
-                novelty=0 if (row["claim"] in row["premise"]) else (.33 if continuous_val_nov else 0),
-                weight=.75*row["mace_ibm"] if continuous_sample_weight else .5
+                novelty=0 if str(row["claim"]).lower() in str(row["premise"]).lower() else
+                (.33 if continuous_val_nov else 0),
+                weight=.75*row["mace_ibm"] if continuous_sample_weight else .5,
+                source="ARCTUKW[Premise+Warrant->Conclusion]"
             ))
         except TypeError:
             logger.opt(exception=True).warning("Corrupted CSV: {}->{}", sid, row)

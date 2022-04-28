@@ -56,7 +56,8 @@ def load_dataset(tokenizer: PreTrainedTokenizer, split: Literal["all", "train", 
             validity=max(0, min(1, .5+(row["stance_WA"]*row["stance_WA_conf"]*(.5*row["WA"]/2))*2))
             if continuous_val_nov else max(0, row["stance_WA"]),
             novelty=None,
-            weight=.5 + row["WA"]/2 + row["stance_WA"]/3 if continuous_sample_weight else 1 + row["stance_WA"]/3
+            weight=.5 + row["WA"]/2 + row["stance_WA"]/3 if continuous_sample_weight else 1 + row["stance_WA"]/3,
+            source="IBMArgQual[Argument-->Topic]"
         ))
 
         logger.trace("Produced a new main sample: {}", samples[-1])
@@ -71,7 +72,8 @@ def load_dataset(tokenizer: PreTrainedTokenizer, split: Literal["all", "train", 
             conclusion=row["Conclusion"],
             validity=int(row["Stance"] == "in favor of"),
             novelty=None,
-            weight=.4 + int(row["Part"] != "china") if continuous_sample_weight else .5
+            weight=.4 + int(row["Part"] != "china") if continuous_sample_weight else .5,
+            source="IBMArgQual+[Argument-->Topic]"
         ))
 
         logger.trace("Produced a new extension sample: {}", samples[-1])
