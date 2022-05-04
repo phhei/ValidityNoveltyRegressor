@@ -6,6 +6,7 @@ from pprint import pformat
 
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
+from ArgumentData import Utils
 from ArgumentData.ExplaGraphs.Loader import load_dataset as load_explagraphs
 from ArgumentData.ValTest.Loader import load_dataset as load_valtest
 from ArgumentData.ARCT.Loader import load_dataset as load_arct
@@ -90,6 +91,12 @@ if __name__ == "__main__":
     train = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Train")
     dev = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
     test = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Test")
+
+    if args.cold_start or args.warm_start:
+        Utils.sampling_technique = "mixed" if args.cold_start and args.warm_start else \
+            ("most informative" if args.warm_start else "random")
+        logger.info("You changed the sampling technique (if you need less samples from a dataset) to: {}",
+                    Utils.sampling_technique)
 
     if args.use_ExplaGraphs != "n/a":
         if args.use_ExplaGraphs is None:
@@ -293,12 +300,6 @@ if __name__ == "__main__":
         logger.info("Training set has the size of {} (+{}) now ({})", len(train), samples_generated,
                     train.get_sample_class_distribution(for_original_data=True))
         train.reset_to_original_data()
-
-    if args.cold_start:
-        raise NotImplementedError("Inspired by active learning -- shuffle...")
-
-    if args.warm_start:
-        raise NotImplementedError("Inspired by active learning -- representative sampling")
 
     if args.sample != "n/a":
         logger.info("You want to sample your training data ({})", len(train))
