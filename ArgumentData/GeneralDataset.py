@@ -6,7 +6,9 @@ from typing import Optional, Any, Iterable, List, Union, Dict, Tuple
 
 import matplotlib.pylab as plt
 import matplotlib.pyplot
+import nltk
 import numpy
+import pandas
 import seaborn
 import torch
 from loguru import logger
@@ -14,7 +16,7 @@ from nltk import sent_tokenize
 from pandas import DataFrame
 from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, AutoTokenizer
 
 from ArgumentData.StringUtils import paraphrase, summarize, add_prefix, \
     remove_non_content_words_manipulate_punctuation, wordnet_changes_text
@@ -164,7 +166,13 @@ class ValidityNoveltyDataset(Dataset):
                         source="{}#{}".format(self.source, "prefix added")
                     )
             elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
-                premise_sents = sent_tokenize(text=self.premise, language="english")
+                try:
+                    premise_sents = sent_tokenize(text=self.premise, language="english")
+                except LookupError:
+                    logger.opt(exception=True).debug("Need to download the nltk-stuff first!")
+                    nltk.download("punkt")
+                    premise_sents = sent_tokenize(text=self.premise, language="english")
+
                 if len(premise_sents) == 1:
                     raise AttributeError("\"{}\" contains too few premises", self.premise)
 
@@ -362,22 +370,46 @@ class ValidityNoveltyDataset(Dataset):
 
     def __getitem__(self, index: Any) -> T_co:
         # x
-        sample = self.samples_extraction[index]
-        ret = self.tokenizer(
-            text=sample.premise, text_pair=sample.conclusion,
-            padding="max_length", truncation="longest_first", max_length=self.max_length,
-            is_split_into_words=False, return_tensors="pt",
-            return_overflowing_tokens=False, return_special_tokens_mask=False,
-            return_offsets_mapping=False, return_length=False, verbose=True
-        )
-        # y
-        ret.update(
-            {
-                "validity": torch.FloatTensor([torch.nan if sample.validity is None else sample.validity]),
-                "novelty": torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty]),
-                "weight": torch.FloatTensor([sample.weight])
-            }
-        )
+        try:
+            sample = self.samples_extraction[index]
+        except IndexError:
+            logger.opt(exception=True).error("Invalid index {}: {}", index, self.name)
+            return self.__getitem__(index=max(0, index-1))
+
+        try:
+            # x
+            ret = self.tokenizer(
+                text=sample.premise, text_pair=sample.conclusion,
+                padding="max_length", truncation="longest_first", max_length=self.max_length,
+                is_split_into_words=False, return_tensors="pt",
+                return_overflowing_tokens=False, return_special_tokens_mask=False,
+                return_offsets_mapping=False, return_length=False, verbose=True
+            )
+            # y
+            ret.update(
+                {
+                    "validity": torch.FloatTensor([torch.nan if sample.validity is None else sample.validity]),
+                    "novelty": torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty]),
+                    "weight": torch.FloatTensor([sample.weight])
+                }
+            )
+        except ValueError:
+            logger.opt(exception=True).error("Corrupted sample at position {}: {} - "
+                                             "please remove it next time!", index, sample)
+            ret = self.tokenizer(
+                text="Bugs are not nice.", text_pair="We should avoid errors in coding.",
+                padding="max_length", truncation="longest_first", max_length=self.max_length,
+                is_split_into_words=False, return_tensors="pt",
+                return_overflowing_tokens=False, return_special_tokens_mask=False,
+                return_offsets_mapping=False, return_length=False, verbose=True
+            )
+            ret.update(
+                {
+                    "validity": torch.FloatTensor([1.]),
+                    "novelty": torch.FloatTensor([1.]),
+                    "weight": torch.FloatTensor([1e-4])
+                }
+            )
 
         ret.data = {k: torch.squeeze(v) for k, v in ret.items()}
 
@@ -975,8 +1007,8 @@ class ValidityNoveltyDataset(Dataset):
                                                                encoding="utf8", errors="ignore"))
 
         DataFrame.from_records(
-            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight) for s in self.samples_original],
-            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight"]
+            data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight, s.source) for s in self.samples_original],
+            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight", "Source"]
         ).to_csv(
             path_or_buf=str(path.joinpath("samples_original.csv").absolute()),
             index=False,
@@ -987,7 +1019,7 @@ class ValidityNoveltyDataset(Dataset):
         DataFrame.from_records(
             data=[(s.premise, s.conclusion, s.validity, s.novelty, s.weight, s.source)
                   for s in self.samples_extraction],
-            columns=["Premise", "Conclusion", "Validity", "novelty", "Weight", "Source"]
+            columns=["Premise", "Conclusion", "Validity", "Novelty", "Weight", "Source"]
         ).to_csv(
             path_or_buf=str(path.joinpath("samples_extraction.csv").absolute()),
             index=False,
@@ -998,3 +1030,70 @@ class ValidityNoveltyDataset(Dataset):
         logger.success("Wrote [{}] files in \"{}\"", ", ".join(map(lambda f: f.name, path.iterdir())), path.name)
 
         return path
+
+    @staticmethod
+    def load(path: Union[Path, str]) -> Dict[str, Any]:
+        if isinstance(path, str):
+            logger.trace("Have to convert to a PATH-object first")
+            path = Path(path)
+
+        logger.debug("Let's load from \"{}\"", path.name)
+
+        if not path.exists():
+            raise FileNotFoundError("Please chose a already existing directory")
+        if not path.is_dir():
+            raise AttributeError(
+                "{} has to be a directory, containing a \"_dev\", \"_test\" and \"_train\"-folder".format(
+                    path.absolute()
+                )
+            )
+
+        ret_datasets = dict()
+
+        for split in ["train", "dev", "test"]:
+            logger.debug("Let's load the {}-split", split)
+            try:
+                sub_path = path.joinpath("_{}".format(split))
+                name: str = sub_path.joinpath("name.prop").read_text(encoding="utf-8", errors="ignore") \
+                    if sub_path.joinpath("name.prop").exists() else "name not found"
+                max_length: int = int(sub_path.joinpath("max_length.prop").read_text(encoding="utf-8", errors="ignore"))
+                tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
+                    sub_path.joinpath("tokenizer.prop").read_text(encoding="utf-8", errors="strict")
+                )
+                logger.info("Loaded the basic properties of \"{}\". Now, the data is left", name)
+                sample_data = dict()
+                for part in ["samples_extraction.csv", "samples_original.csv"]:
+                    data_sub_path = sub_path.joinpath(part)
+                    logger.trace("Let's load {}", data_sub_path)
+                    samples = []
+                    for sid, row in pandas.read_csv(str(data_sub_path.absolute()), encoding="utf-8").iterrows():
+                        logger.trace("Read line \"{}\"", sid)
+                        samples.append(ValidityNoveltyDataset.Sample(
+                            premise=row["Premise"],
+                            conclusion=row["Conclusion"],
+                            validity=row["Validity"],
+                            novelty=row["Novelty"] if "Novelty" in row else row["novelty"],
+                            weight=row["Weight"],
+                            source=row["Source"] if "Source" in row else "n/a"
+                        ))
+                        logger.trace("Appended: {}", samples[-1])
+                    logger.info("Collected {} samples for \"{}\" --> {}", len(samples), name, part)
+                    sample_data[part] = samples
+
+                ret = ValidityNoveltyDataset(samples=sample_data["samples_original.csv"],
+                                             tokenizer=tokenizer, max_length=max_length, name=name)
+                ret.samples_extraction = sample_data["samples_extraction.csv"]
+
+                logger.success("For the split \"{}\": {}", split, ret)
+
+                ret_datasets[split] = ret
+            except Exception:
+                logger.opt(exception=True).critical("Split \"{}\" was not loadable!", split)
+                ret_datasets[split] = ValidityNoveltyDataset(samples=[],
+                                                             tokenizer=AutoTokenizer.from_pretrained("roberta-base"),
+                                                             name="ERROR - original data was not loadable")
+
+        logger.success("Loaded all {} datasets: {}", len(ret_datasets),
+                       " *** ".join(map(lambda v: "\"{}\"".format(v), ret_datasets.values())))
+
+        return ret_datasets

@@ -6,7 +6,7 @@
 loguru>=0.5.0
 numpy~=1.22.3
 pandas>=1.4.0
-nltk
+nltk>=3.2
 
 # for neural AI stuff
 torch==1.11.*

@@ -40,6 +40,8 @@ if __name__ == "__main__":
                       help="Verbose mode - more logging output from hugging-face")
     argv.add_argument("--save_memory_training", action="store_true", default=False, required=False,
                       help="gradient_checkpointing")
+    argv.add_argument("--use_preloaded_dataset", action="store", type=Path, default=None, required=False,
+                      help="If you want to use a preloaded dataset, give here the root path")
     argv.add_argument("--use_ExplaGraphs", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the ExplaGraphs for training. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
@@ -86,213 +88,222 @@ if __name__ == "__main__":
     logger.info("Welcome to the ValidityNoveltyRegressor -- you made {} specific choices", len(sys.argv)-1)
 
     args = argv.parse_args()
-    tokenizer = transformers.RobertaTokenizer.from_pretrained(args.transformer)
 
-    train = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Train")
-    dev = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
-    test = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Test")
+    if args.use_preloaded_dataset is None:
+        tokenizer = transformers.RobertaTokenizer.from_pretrained(args.transformer)
 
-    if args.cold_start or args.warm_start:
-        Utils.sampling_technique = "mixed" if args.cold_start and args.warm_start else \
-            ("most informative" if args.warm_start else "random")
-        logger.info("You changed the sampling technique (if you need less samples from a dataset) to: {}",
-                    Utils.sampling_technique)
+        train = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Train")
+        dev = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
+        test = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Test")
 
-    if args.use_ExplaGraphs != "n/a":
-        if args.use_ExplaGraphs is None:
-            logger.debug("You want to use the entire ExplaGraphs as a part of the training set - fine")
-            train += load_arct(split="train", tokenizer=tokenizer)
-            train += load_arct(split="dev", tokenizer=tokenizer)
-        else:
-            logger.debug("You want to use the ExplaGraphs as a part of the training set with "
-                         "following specifications: {}", args.use_ExplaGraphs)
-            arg_explagraphs = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_explagraphs.add_argument("-s", "--split", action="store", default="train", type=str,
-                                         choices=["train", "dev"], required=False)
-            arg_explagraphs.add_argument("-l", "--max_length_sample", action="store", default=96, type=int,
-                                         required=False)
-            arg_explagraphs.add_argument("-n", "--max_number", action="store", default=-1, type=int,
-                                         required=False)
-            arg_explagraphs.add_argument("--generate_non_novel_non_valid_samples_by_random", action="store_true",
-                                         default=False, required=False)
-            arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float, required=False)
-            arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                         required=False)
-            parsed_args_explagraphs = arg_explagraphs.parse_args(
-                args.use_ExplaGraphs[1:].split("#") if args.use_ExplaGraphs.startswith("#")
-                else args.use_ExplaGraphs.split("#")
-            )
-            train += load_explagraphs(
-                split=parsed_args_explagraphs.split, tokenizer=tokenizer,
-                max_length_sample=parsed_args_explagraphs.max_length_sample,
-                max_number=parsed_args_explagraphs.max_number,
-                generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
-                continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
-                parsed_args_explagraphs.continuous_val_nov,
-                continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
-            )
+        if args.cold_start or args.warm_start:
+            Utils.sampling_technique = "mixed" if args.cold_start and args.warm_start else \
+                ("most informative" if args.warm_start else "random")
+            logger.info("You changed the sampling technique (if you need less samples from a dataset) to: {}",
+                        Utils.sampling_technique)
 
-    if args.use_ARCT != "n/a":
-        if args.use_ARCT is None:
-            logger.debug("You want to use the entire ARCT-dataset as a part of the training set - fine")
-            train += load_arct(split="train", tokenizer=tokenizer)
-            train += load_arct(split="dev", tokenizer=tokenizer)
-            train += load_arct(split="test", tokenizer=tokenizer)
-        else:
-            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
-                         "following specifications: {}", args.use_ARCT)
-            arg_ARCT = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_ARCT.add_argument("-s", "--split", action="store", default="train", type=str,
-                                  choices=["all", "train", "dev", "test"], required=False)
-            arg_ARCT.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
-            arg_ARCT.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-            arg_ARCT.add_argument("--exclude_adversarial_data", action="store_true", default=False, required=False)
-            arg_ARCT.add_argument("--include_topic", action="store_true", default=False, required=False)
-            arg_ARCT.add_argument("--include_debate_info", action="store_true", default=False, required=False)
-            arg_ARCT.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-            arg_ARCT.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
-            parsed_args_arct = arg_ARCT.parse_args(
-                args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
-            )
-            for split in (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
-                train += load_arct(
-                    split=parsed_args_arct.split, tokenizer=tokenizer,
-                    max_length_sample=parsed_args_arct.max_length_sample,
-                    max_number=parsed_args_arct.max_number,
-                    continuous_val_nov=parsed_args_arct.continuous_val_nov,
-                    continuous_sample_weight=parsed_args_arct.continuous_sample_weight,
-                    include_adversarial_data=not parsed_args_arct.exclude_adversarial_data,
-                    include_topic=parsed_args_arct.include_topic,
-                    include_debate_info=parsed_args_arct.include_debate_info
+        if args.use_ExplaGraphs != "n/a":
+            if args.use_ExplaGraphs is None:
+                logger.debug("You want to use the entire ExplaGraphs as a part of the training set - fine")
+                train += load_arct(split="train", tokenizer=tokenizer)
+                train += load_arct(split="dev", tokenizer=tokenizer)
+            else:
+                logger.debug("You want to use the ExplaGraphs as a part of the training set with "
+                             "following specifications: {}", args.use_ExplaGraphs)
+                arg_explagraphs = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_explagraphs.add_argument("-s", "--split", action="store", default="train", type=str,
+                                             choices=["train", "dev"], required=False)
+                arg_explagraphs.add_argument("-l", "--max_length_sample", action="store", default=96, type=int,
+                                             required=False)
+                arg_explagraphs.add_argument("-n", "--max_number", action="store", default=-1, type=int,
+                                             required=False)
+                arg_explagraphs.add_argument("--generate_non_novel_non_valid_samples_by_random", action="store_true",
+                                             default=False, required=False)
+                arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float, required=False)
+                arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                             required=False)
+                parsed_args_explagraphs = arg_explagraphs.parse_args(
+                    args.use_ExplaGraphs[1:].split("#") if args.use_ExplaGraphs.startswith("#")
+                    else args.use_ExplaGraphs.split("#")
+                )
+                train += load_explagraphs(
+                    split=parsed_args_explagraphs.split, tokenizer=tokenizer,
+                    max_length_sample=parsed_args_explagraphs.max_length_sample,
+                    max_number=parsed_args_explagraphs.max_number,
+                    generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
+                    continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
+                    parsed_args_explagraphs.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
                 )
 
-    if args.use_ARCTUKW != "n/a":
-        if args.use_ARCTUKW is None:
-            logger.debug("You want to use the entire ARCT-UKW-dataset as a part of the training set - fine")
-            train += load_arct_ukw(tokenizer=tokenizer)
-        else:
-            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
-                         "following specifications: {}", args.use_ARCT)
-            arg_ARCTUKW = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_ARCTUKW.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
-            arg_ARCTUKW.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-            arg_ARCTUKW.add_argument("-th", "--quality_threshold", action="store", default=None, type=float,
-                                     required=False)
-            arg_ARCTUKW.add_argument("--include_topic", action="store_true", default=False, required=False)
-            arg_ARCTUKW.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-            arg_ARCTUKW.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
-            parsed_args_arct_ukw = arg_ARCTUKW.parse_args(
-                args.use_ARCTUKW[1:].split("#") if args.use_ARCTUKW.startswith("#") else args.use_ARCTUKW.split("#")
-            )
-            train += load_arct_ukw(
-                tokenizer=tokenizer,
-                max_length_sample=parsed_args_arct_ukw.max_length_sample,
-                max_number=parsed_args_arct_ukw.max_number,
-                continuous_val_nov=parsed_args_arct_ukw.continuous_val_nov,
-                continuous_sample_weight=parsed_args_arct_ukw.continuous_sample_weight,
-                include_topic=parsed_args_arct_ukw.include_topic,
-                mace_ibm_threshold=parsed_args_arct_ukw.quality_threshold
-            )
+        if args.use_ARCT != "n/a":
+            if args.use_ARCT is None:
+                logger.debug("You want to use the entire ARCT-dataset as a part of the training set - fine")
+                train += load_arct(split="train", tokenizer=tokenizer)
+                train += load_arct(split="dev", tokenizer=tokenizer)
+                train += load_arct(split="test", tokenizer=tokenizer)
+            else:
+                logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                             "following specifications: {}", args.use_ARCT)
+                arg_ARCT = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_ARCT.add_argument("-s", "--split", action="store", default="train", type=str,
+                                      choices=["all", "train", "dev", "test"], required=False)
+                arg_ARCT.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_ARCT.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+                arg_ARCT.add_argument("--exclude_adversarial_data", action="store_true", default=False, required=False)
+                arg_ARCT.add_argument("--include_topic", action="store_true", default=False, required=False)
+                arg_ARCT.add_argument("--include_debate_info", action="store_true", default=False, required=False)
+                arg_ARCT.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+                arg_ARCT.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                parsed_args_arct = arg_ARCT.parse_args(
+                    args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
+                )
+                for split in (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
+                    train += load_arct(
+                        split=parsed_args_arct.split, tokenizer=tokenizer,
+                        max_length_sample=parsed_args_arct.max_length_sample,
+                        max_number=parsed_args_arct.max_number,
+                        continuous_val_nov=parsed_args_arct.continuous_val_nov,
+                        continuous_sample_weight=parsed_args_arct.continuous_sample_weight,
+                        include_adversarial_data=not parsed_args_arct.exclude_adversarial_data,
+                        include_topic=parsed_args_arct.include_topic,
+                        include_debate_info=parsed_args_arct.include_debate_info
+                    )
 
-    if args.use_IBM != "n/a":
-        if args.use_IBM is None:
-            logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
-            train += load_ibm(tokenizer=tokenizer)
-        else:
-            logger.debug("You want to use the ARCT-dataset as a part of the training set with "
-                         "following specifications: {}", args.use_ARCT)
-            arg_IBM = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_IBM.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
-            arg_IBM.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-            arg_IBM.add_argument("-th", "--quality_threshold", action="store", default=None, type=float, required=False)
-            arg_IBM.add_argument("-s", "--split", action="store", default="all", type=str,
-                                 choices=["all", "train", "dev", "test"], required=False)
-            arg_IBM.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-            arg_IBM.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
-            parsed_args_ibm = arg_IBM.parse_args(
-                args.use_IBM[1:].split("#") if args.use_IBM.startswith("#") else args.use_IBM.split("#")
-            )
-            train += load_ibm(
-                tokenizer=tokenizer,
-                split=parsed_args_ibm.split,
-                max_length_sample=parsed_args_ibm.max_length_sample,
-                max_number=parsed_args_ibm.max_number,
-                continuous_val_nov=parsed_args_ibm.continuous_val_nov,
-                continuous_sample_weight=parsed_args_ibm.continuous_sample_weight,
-                quality_threshold=parsed_args_ibm.quality_threshold
-            )
+        if args.use_ARCTUKW != "n/a":
+            if args.use_ARCTUKW is None:
+                logger.debug("You want to use the entire ARCT-UKW-dataset as a part of the training set - fine")
+                train += load_arct_ukw(tokenizer=tokenizer)
+            else:
+                logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                             "following specifications: {}", args.use_ARCT)
+                arg_ARCTUKW = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_ARCTUKW.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_ARCTUKW.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+                arg_ARCTUKW.add_argument("-th", "--quality_threshold", action="store", default=None, type=float,
+                                         required=False)
+                arg_ARCTUKW.add_argument("--include_topic", action="store_true", default=False, required=False)
+                arg_ARCTUKW.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+                arg_ARCTUKW.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                parsed_args_arct_ukw = arg_ARCTUKW.parse_args(
+                    args.use_ARCTUKW[1:].split("#") if args.use_ARCTUKW.startswith("#") else args.use_ARCTUKW.split("#")
+                )
+                train += load_arct_ukw(
+                    tokenizer=tokenizer,
+                    max_length_sample=parsed_args_arct_ukw.max_length_sample,
+                    max_number=parsed_args_arct_ukw.max_number,
+                    continuous_val_nov=parsed_args_arct_ukw.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_arct_ukw.continuous_sample_weight,
+                    include_topic=parsed_args_arct_ukw.include_topic,
+                    mace_ibm_threshold=parsed_args_arct_ukw.quality_threshold
+                )
 
-    if args.use_essays != "n/a":
-        if args.use_essays is None:
-            logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
-            train += load_essays(tokenizer=tokenizer)
-        else:
-            logger.debug("You want to use the Student-Essays-dataset as a part of the training set with "
-                         "following specifications: {}", args.use_essays)
-            arg_essays = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_essays.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
-            arg_essays.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-            arg_essays.add_argument("--include_samples_without_detail_annotation_info", action="store_false",
-                                    default=True, required=False)
-            arg_essays.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-            arg_essays.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
-            parsed_args_essays = arg_essays.parse_args(
-                args.use_essays[1:].split("#") if args.use_essays.startswith("#") else args.use_essays.split("#")
-            )
-            train += load_essays(
-                tokenizer=tokenizer,
-                max_length_sample=parsed_args_essays.max_length_sample,
-                max_number=parsed_args_essays.max_number,
-                exclude_samples_without_detail_annotation_info=parsed_args_essays.include_samples_without_detail_annotation_info,
-                continuous_val_nov=parsed_args_essays.continuous_val_nov,
-                continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
-            )
+        if args.use_IBM != "n/a":
+            if args.use_IBM is None:
+                logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
+                train += load_ibm(tokenizer=tokenizer)
+            else:
+                logger.debug("You want to use the ARCT-dataset as a part of the training set with "
+                             "following specifications: {}", args.use_ARCT)
+                arg_IBM = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_IBM.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_IBM.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+                arg_IBM.add_argument("-th", "--quality_threshold", action="store", default=None, type=float, required=False)
+                arg_IBM.add_argument("-s", "--split", action="store", default="all", type=str,
+                                     choices=["all", "train", "dev", "test"], required=False)
+                arg_IBM.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+                arg_IBM.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                parsed_args_ibm = arg_IBM.parse_args(
+                    args.use_IBM[1:].split("#") if args.use_IBM.startswith("#") else args.use_IBM.split("#")
+                )
+                train += load_ibm(
+                    tokenizer=tokenizer,
+                    split=parsed_args_ibm.split,
+                    max_length_sample=parsed_args_ibm.max_length_sample,
+                    max_number=parsed_args_ibm.max_number,
+                    continuous_val_nov=parsed_args_ibm.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_ibm.continuous_sample_weight,
+                    quality_threshold=parsed_args_ibm.quality_threshold
+                )
 
-    if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
-        if args.use_ValTest != "n/a":
-            logger.debug("You want to use the ValTest as a part of the validation/ test set")
-        else:
-            logger.info("Default included dataset")
+        if args.use_essays != "n/a":
+            if args.use_essays is None:
+                logger.debug("You want to use the entire IBM-Arg-dataset as a part of the training set - fine")
+                train += load_essays(tokenizer=tokenizer)
+            else:
+                logger.debug("You want to use the Student-Essays-dataset as a part of the training set with "
+                             "following specifications: {}", args.use_essays)
+                arg_essays = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_essays.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_essays.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+                arg_essays.add_argument("--include_samples_without_detail_annotation_info", action="store_false",
+                                        default=True, required=False)
+                arg_essays.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
+                arg_essays.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                parsed_args_essays = arg_essays.parse_args(
+                    args.use_essays[1:].split("#") if args.use_essays.startswith("#") else args.use_essays.split("#")
+                )
+                train += load_essays(
+                    tokenizer=tokenizer,
+                    max_length_sample=parsed_args_essays.max_length_sample,
+                    max_number=parsed_args_essays.max_number,
+                    exclude_samples_without_detail_annotation_info=parsed_args_essays.include_samples_without_detail_annotation_info,
+                    continuous_val_nov=parsed_args_essays.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
+                )
 
-        if len(sys.argv) <= 1 or args.use_ValTest is None:
-            ds = load_valtest(split="dev", tokenizer=tokenizer)
-            if args.use_ValForTrain:
-                train += ds
-            dev += ds
-            test += load_valtest(split="test", tokenizer=tokenizer)
-        else:
-            arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-            arg_ValTest.add_argument("-l", "--max_length_sample", action="store", default=132, type=int,
-                                     required=False)
-            arg_ValTest.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-            arg_ValTest.add_argument("-t", "--include_topic", action="store_true",  default=False,
-                                     required=False)
-            arg_ValTest.add_argument("--continuous_val_nov", action="store_true", default=False,
-                                     required=False)
-            arg_ValTest.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                     required=False)
-            parsed_args_ValTest = arg_ValTest.parse_args(
-                args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
-            )
-            ds = load_valtest(
-                split="dev", tokenizer=tokenizer,
-                max_length_sample=parsed_args_ValTest.max_length_sample,
-                max_number=parsed_args_ValTest.max_number,
-                include_topic=parsed_args_ValTest.include_topic,
-                continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
-                continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
-            )
-            if args.use_ValForTrain:
-                train += ds
-            dev += ds
-            test += load_valtest(
-                split="test", tokenizer=tokenizer,
-                max_length_sample=parsed_args_ValTest.max_length_sample,
-                max_number=parsed_args_ValTest.max_number,
-                include_topic=parsed_args_ValTest.include_topic,
-                continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
-                continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
-            )
+        if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
+            if args.use_ValTest != "n/a":
+                logger.debug("You want to use the ValTest as a part of the validation/ test set")
+            else:
+                logger.info("Default included dataset")
+
+            if len(sys.argv) <= 1 or args.use_ValTest is None:
+                ds = load_valtest(split="dev", tokenizer=tokenizer)
+                if args.use_ValForTrain:
+                    train += ds
+                dev += ds
+                test += load_valtest(split="test", tokenizer=tokenizer)
+            else:
+                arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+                arg_ValTest.add_argument("-l", "--max_length_sample", action="store", default=132, type=int,
+                                         required=False)
+                arg_ValTest.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+                arg_ValTest.add_argument("-t", "--include_topic", action="store_true",  default=False,
+                                         required=False)
+                arg_ValTest.add_argument("--continuous_val_nov", action="store_true", default=False,
+                                         required=False)
+                arg_ValTest.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                         required=False)
+                parsed_args_ValTest = arg_ValTest.parse_args(
+                    args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
+                )
+                ds = load_valtest(
+                    split="dev", tokenizer=tokenizer,
+                    max_length_sample=parsed_args_ValTest.max_length_sample,
+                    max_number=parsed_args_ValTest.max_number,
+                    include_topic=parsed_args_ValTest.include_topic,
+                    continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
+                )
+                if args.use_ValForTrain:
+                    train += ds
+                dev += ds
+                test += load_valtest(
+                    split="test", tokenizer=tokenizer,
+                    max_length_sample=parsed_args_ValTest.max_length_sample,
+                    max_number=parsed_args_ValTest.max_number,
+                    include_topic=parsed_args_ValTest.include_topic,
+                    continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
+                )
+    else:
+        logger.warning("OK, let's load the dataset from \"{}\" (all --use-parameters are ignored)",
+                       args.use_preloaded_dataset.name)
+        datasets = ValidityNoveltyDataset.load(path=args.use_preloaded_dataset)
+        train: ValidityNoveltyDataset = datasets["train"]
+        dev: ValidityNoveltyDataset = datasets["dev"]
+        test: ValidityNoveltyDataset = datasets["test"]
 
     if args.generate_more_training_samples:
         logger.info("You want to automatically generate more training samples - ok, let's do it!")
@@ -343,35 +354,48 @@ if __name__ == "__main__":
     if len(test) == 0:
         logger.warning("No test data given...")
 
-    output_dir: Path = Path(".out",
-                            VERSION,
-                            args.transformer,
-                            str(train).replace("(", "_").replace(")", "_").replace("*", ""))
-    if output_dir.exists():
-        logger.warning("The dictionary \"{}\" exists already - [re]move it!", output_dir.absolute())
-        target = Path(".out", VERSION, "_old", args.transformer,
-                      "{} {}".format(datetime.datetime.now().isoformat(sep="_", timespec="minutes").replace(":", "-"),
-                                     output_dir.name))
-        logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.use_preloaded_dataset is None:
+        output_dir: Path = Path(".out",
+                                VERSION,
+                                args.transformer,
+                                str(train).replace("(", "_").replace(")", "_").replace("*", ""))
+        if output_dir.exists():
+            logger.warning("The dictionary \"{}\" exists already - [re]move it!", output_dir.absolute())
+            target = Path(".out", VERSION, "_old", args.transformer,
+                          "{} {}".format(datetime.datetime.now().isoformat(sep="_", timespec="minutes").replace(":", "-"),
+                                         output_dir.name))
+            logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.save != "n/a" and args.save != "no-dataset":
-        logger.debug("You want to save the dataset")
-        train.save(path=output_dir.joinpath("_train"))
-        dev.save(path=output_dir.joinpath("_dev"))
-        test.save(path=output_dir.joinpath("_test"))
+        if args.save != "n/a" and args.save != "no-dataset":
+            logger.debug("You want to save the dataset")
+            train.save(path=output_dir.joinpath("_train"))
+            dev.save(path=output_dir.joinpath("_dev"))
+            test.save(path=output_dir.joinpath("_test"))
 
-    if (isinstance(args.analyse, str) and args.analyse == "train") or "train" in args.analyse:
-        train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
-                                  save_heatmaps=str(output_dir.joinpath("train_analyse.png").absolute()))
-    if (isinstance(args.analyse, str) and (args.analyse.startswith("dev") or args.analyse.startswith("val"))) \
-            or "dev" in args.analyse or "development" in args.analyse \
-            or "val" in args.analyse or "validation" in args.analyse:
-        dev.depth_analysis_data(show_heatmaps=False,
-                                save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
-    if (isinstance(args.analyse, str) and args.analyse == "test") or "test" in args.analyse:
-        test.depth_analysis_data(show_heatmaps=False,
-                                 save_heatmaps=str(output_dir.joinpath("test_analyse.png").absolute()))
+        if (isinstance(args.analyse, str) and args.analyse == "train") or "train" in args.analyse:
+            train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
+                                      save_heatmaps=str(output_dir.joinpath("train_analyse.png").absolute()))
+        if (isinstance(args.analyse, str) and (args.analyse.startswith("dev") or args.analyse.startswith("val"))) \
+                or "dev" in args.analyse or "development" in args.analyse \
+                or "val" in args.analyse or "validation" in args.analyse:
+            dev.depth_analysis_data(show_heatmaps=False,
+                                    save_heatmaps=str(output_dir.joinpath("dev_analyse.png").absolute()))
+        if (isinstance(args.analyse, str) and args.analyse == "test") or "test" in args.analyse:
+            test.depth_analysis_data(show_heatmaps=False,
+                                     save_heatmaps=str(output_dir.joinpath("test_analyse.png").absolute()))
+    else:
+        logger.debug("Let's continue with \"{}\"", args.use_preloaded_dataset)
+        output_dir: Path = args.use_preloaded_dataset
+
+        if args.save != "n/a" and args.save != "no-dataset":
+            logger.debug("Don't save/ analyse loaded datasets again!")
+
+        output_dir = output_dir.joinpath("_reload")
+        output_dir = output_dir.joinpath(
+            "{}-{}".format(args.transformer, len(list(output_dir.glob(pattern="{}-*".format(args.transformer)))))
+        )
+        logger.info("Final output path: {}", output_dir)
 
     trainer = ValNovTrainer(
         model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),
