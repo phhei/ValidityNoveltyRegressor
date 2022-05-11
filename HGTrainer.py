@@ -58,7 +58,10 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
             ) / numpy.size(eval_data.predictions),
             "exact_hits": numpy.count_nonzero(
                 numpy.where(numpy.abs(eval_data.predictions-eval_data.label_ids) < .05, 1, 0)
-            ) / numpy.size(eval_data.predictions)
+            ) / numpy.size(eval_data.predictions),
+            "accuracy_validity": -1,
+            "accuracy_novelty": -1,
+            "accuracy": -1
         }
 
 
@@ -82,7 +85,34 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
         ) / numpy.size(is_validity),
         "exact_hits": numpy.sum(
             numpy.where(numpy.abs(is_validity - should_validity) + numpy.abs(is_novelty - should_novelty) < .05, 1, 0)
-        ) / numpy.size(is_validity)
+        ) / numpy.size(is_validity),
+        "accuracy_validity": numpy.sum(numpy.where(
+            numpy.any(numpy.stack([
+                numpy.all(numpy.stack([is_validity >= .5, should_validity >= .5]), axis=0),
+                numpy.all(numpy.stack([is_validity < .5, should_validity < .5]), axis=0)
+            ]), axis=0),
+            1, 0
+        )) / numpy.size(is_validity),
+        "accuracy_novelty": numpy.sum(numpy.where(
+            numpy.any(numpy.stack([
+                numpy.all(numpy.stack([is_novelty >= .5, should_novelty >= .5]), axis=0),
+                numpy.all(numpy.stack([is_validity < .5, should_novelty < .5]), axis=0)
+            ]), axis=0),
+            1, 0
+        )) / numpy.size(is_validity),
+        "accuracy": numpy.sum(numpy.where(
+            numpy.any(numpy.stack([
+                numpy.all(numpy.stack([is_validity >= .5, should_validity >= .5, is_novelty >= .5, should_novelty >= .5]),
+                          axis=0),
+                numpy.all(numpy.stack([is_validity >= .5, should_validity >= .5, is_novelty < .5, should_novelty < .5]),
+                          axis=0),
+                numpy.all(numpy.stack([is_validity < .5, should_validity < .5, is_novelty >= .5, should_novelty >= .5]),
+                          axis=0),
+                numpy.all(numpy.stack([is_validity < .5, should_validity < .5, is_novelty < .5, should_novelty < .5]),
+                          axis=0)
+            ]), axis=0),
+            1, 0
+        )) / numpy.size(is_validity)
     }
 
 

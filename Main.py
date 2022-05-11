@@ -361,9 +361,13 @@ if __name__ == "__main__":
                                 str(train).replace("(", "_").replace(")", "_").replace("*", ""))
         if output_dir.exists():
             logger.warning("The dictionary \"{}\" exists already - [re]move it!", output_dir.absolute())
-            target = Path(".out", VERSION, "_old", args.transformer,
-                          "{} {}".format(datetime.datetime.now().isoformat(sep="_", timespec="minutes").replace(":", "-"),
-                                         output_dir.name))
+            target = Path(
+                ".out", VERSION, "_old", args.transformer,
+                "{} {}".format(
+                    datetime.datetime.now().isoformat(sep="_", timespec="minutes").replace(":", "-"),
+                    output_dir.name
+                )
+            )
             logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
         output_dir.mkdir(parents=True, exist_ok=True)
 
