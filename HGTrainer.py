@@ -96,7 +96,7 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
         "accuracy_novelty": numpy.sum(numpy.where(
             numpy.any(numpy.stack([
                 numpy.all(numpy.stack([is_novelty >= .5, should_novelty >= .5]), axis=0),
-                numpy.all(numpy.stack([is_validity < .5, should_novelty < .5]), axis=0)
+                numpy.all(numpy.stack([is_novelty < .5, should_novelty < .5]), axis=0)
             ]), axis=0),
             1, 0
         )) / numpy.size(is_validity),
