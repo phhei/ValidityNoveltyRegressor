@@ -408,7 +408,8 @@ if __name__ == "__main__":
             do_train=True,
             do_eval=True,
             do_predict=True,
-            evaluation_strategy="epoch",
+            evaluation_strategy="steps",
+            eval_steps=int((len(train)/args.batch_size)/4) if args.verbose else int((len(train)/args.batch_size)/2),
             per_device_train_batch_size=args.batch_size,
             per_device_eval_batch_size=args.batch_size,
             learning_rate=args.learning_rate,
@@ -421,11 +422,12 @@ if __name__ == "__main__":
             logging_strategy="steps",
             logging_steps=5 if args.verbose else 25,
             logging_nan_inf_filter=True,
-            save_strategy="epoch",
-            save_total_limit=1+int(args.verbose),
+            save_strategy="steps",
+            save_steps=int((len(train)/args.batch_size)/4) if args.verbose else int((len(train)/args.batch_size)/2),
+            save_total_limit=3+int(args.verbose),
             label_names=["validity", "novelty"],
             load_best_model_at_end=True,
-            metric_for_best_model="eval_approximately_hits",
+            metric_for_best_model="eval_accuracy",
             greater_is_better=True,
             label_smoothing_factor=0.0,
             push_to_hub=False,
@@ -434,7 +436,7 @@ if __name__ == "__main__":
         train_dataset=train,
         eval_dataset=None if len(dev) == 0 else dev,
         compute_metrics=val_nov_metric,
-        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=2, early_stopping_threshold=.01)]
+        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=3, early_stopping_threshold=.01)]
     )
 
     logger.success("Successfully initialized the trainer: {}", trainer)
