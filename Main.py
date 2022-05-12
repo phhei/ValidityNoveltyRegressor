@@ -436,7 +436,8 @@ if __name__ == "__main__":
         train_dataset=train,
         eval_dataset=None if len(dev) == 0 else dev,
         compute_metrics=val_nov_metric,
-        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=3, early_stopping_threshold=.01)]
+        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=5 if args.verbose else 3,
+                                                      early_stopping_threshold=.005)]
     )
 
     logger.success("Successfully initialized the trainer: {}", trainer)
