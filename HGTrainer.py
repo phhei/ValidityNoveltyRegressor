@@ -45,6 +45,7 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
                        "because validity and novelty are not distinguishable")
 
         return {
+            "size": numpy.size(eval_data.label_ids),
             "mse_validity": numpy.mean((eval_data.predictions-eval_data.label_ids) ** 2),
             "mse_novelty": numpy.mean((eval_data.predictions-eval_data.label_ids) ** 2),
             "error_validity": numpy.mean(numpy.abs(eval_data.predictions-eval_data.label_ids)),
@@ -68,6 +69,7 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
 def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
                     is_novelty: numpy.ndarray, should_novelty: numpy.ndarray) -> Dict[str, float]:
     return {
+        "size": numpy.size(is_validity),
         "mse_validity": numpy.mean((is_validity - should_validity) ** 2),
         "mse_novelty": numpy.mean((is_novelty - should_novelty) ** 2),
         "error_validity": numpy.mean(numpy.abs(is_validity - should_validity)),

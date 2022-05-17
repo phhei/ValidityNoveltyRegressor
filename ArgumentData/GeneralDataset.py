@@ -373,7 +373,7 @@ class ValidityNoveltyDataset(Dataset):
         try:
             sample = self.samples_extraction[index]
         except IndexError:
-            logger.opt(exception=True).error("Invalid index {}: {}", index, self.name)
+            logger.opt(exception=False).error("Invalid index {}: {}", index, self.name)
             return self.__getitem__(index=max(0, index-1))
 
         try:
@@ -394,7 +394,7 @@ class ValidityNoveltyDataset(Dataset):
                 }
             )
         except ValueError:
-            logger.opt(exception=True).error("Corrupted sample at position {}: {} - "
+            logger.opt(exception=False).error("Corrupted sample at position {}: {} - "
                                              "please remove it next time!", index, sample)
             ret = self.tokenizer(
                 text="Bugs are not nice.", text_pair="We should avoid errors in coding.",

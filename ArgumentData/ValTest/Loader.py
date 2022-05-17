@@ -6,8 +6,8 @@ from transformers import PreTrainedTokenizer
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.Utils import truncate_df
 
-dev_path = "ArgumentData/ValTest/dev.csv"
-test_path = "ArgumentData/ValTest/test.csv"
+dev_path = "ArgumentData/ValTest/dev_better_balanced.csv"
+test_path = "ArgumentData/ValTest/test_better_balanced.csv"
 data_path = "ArgumentData/ValTest/validity_novelty_corpus.csv"
 comparative_path = "ArgumentData/ValTest/validity_novelty_corpus-comparative.csv"
 
@@ -71,11 +71,11 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
                 if num_comparable_voters > 0:
                     weight = \
                         5 - ((row_data["number_neutral_validity_votes"] + row_data["number_neutral_novelty_votes"])
-                             / (2 / 5) * num_voters)
+                             * (3. / (2 * num_voters)))
                 else:
                     weight = \
                         3 - ((row_data["number_neutral_validity_votes"] + row_data["number_neutral_novelty_votes"])
-                             / (2 / 3) * num_voters)
+                             * (2. / (2 * num_voters)))
             else:
                 weight = 3
             samples.append(ValidityNoveltyDataset.Sample(

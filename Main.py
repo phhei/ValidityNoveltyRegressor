@@ -18,7 +18,7 @@ from loguru import logger
 import transformers
 import argparse
 
-VERSION: str = "V0.1.2"
+VERSION: str = "V0.1.3"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -259,11 +259,8 @@ if __name__ == "__main__":
                 logger.info("Default included dataset")
 
             if len(sys.argv) <= 1 or args.use_ValTest is None:
-                ds = load_valtest(split="dev", tokenizer=tokenizer)
-                if args.use_ValForTrain:
-                    train += ds
-                dev += ds
-                test += load_valtest(split="test", tokenizer=tokenizer)
+                dev_split = load_valtest(split="dev", tokenizer=tokenizer)
+                test_split = load_valtest(split="test", tokenizer=tokenizer)
             else:
                 arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
                 arg_ValTest.add_argument("-l", "--max_length_sample", action="store", default=132, type=int,
@@ -278,7 +275,7 @@ if __name__ == "__main__":
                 parsed_args_ValTest = arg_ValTest.parse_args(
                     args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
                 )
-                ds = load_valtest(
+                dev_split = load_valtest(
                     split="dev", tokenizer=tokenizer,
                     max_length_sample=parsed_args_ValTest.max_length_sample,
                     max_number=parsed_args_ValTest.max_number,
@@ -286,10 +283,7 @@ if __name__ == "__main__":
                     continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
                     continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
                 )
-                if args.use_ValForTrain:
-                    train += ds
-                dev += ds
-                test += load_valtest(
+                test_split = load_valtest(
                     split="test", tokenizer=tokenizer,
                     max_length_sample=parsed_args_ValTest.max_length_sample,
                     max_number=parsed_args_ValTest.max_number,
@@ -297,6 +291,11 @@ if __name__ == "__main__":
                     continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
                     continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
                 )
+
+            if args.use_ValForTrain:
+                train += dev_split
+            dev += dev_split
+            test += test_split
     else:
         logger.warning("OK, let's load the dataset from \"{}\" (all --use-parameters are ignored)",
                        args.use_preloaded_dataset.name)
@@ -409,7 +408,7 @@ if __name__ == "__main__":
             do_eval=True,
             do_predict=True,
             evaluation_strategy="steps",
-            eval_steps=int((len(train)/args.batch_size)/4) if args.verbose else int((len(train)/args.batch_size)/2),
+            eval_steps=int((len(train)/args.batch_size)/4),
             per_device_train_batch_size=args.batch_size,
             per_device_eval_batch_size=args.batch_size,
             learning_rate=args.learning_rate,
@@ -421,10 +420,11 @@ if __name__ == "__main__":
             log_level_replica="info" if args.verbose else "warning",
             logging_strategy="steps",
             logging_steps=5 if args.verbose else 25,
+            logging_first_step=True,
             logging_nan_inf_filter=True,
             save_strategy="steps",
-            save_steps=int((len(train)/args.batch_size)/4) if args.verbose else int((len(train)/args.batch_size)/2),
-            save_total_limit=3+int(args.verbose),
+            save_steps=int((len(train)/args.batch_size)/4),
+            save_total_limit=6+int(args.verbose),
             label_names=["validity", "novelty"],
             load_best_model_at_end=True,
             metric_for_best_model="eval_accuracy",
@@ -436,8 +436,7 @@ if __name__ == "__main__":
         train_dataset=train,
         eval_dataset=None if len(dev) == 0 else dev,
         compute_metrics=val_nov_metric,
-        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=5 if args.verbose else 3,
-                                                      early_stopping_threshold=.005)]
+        callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=.005)]
     )
 
     logger.success("Successfully initialized the trainer: {}", trainer)
