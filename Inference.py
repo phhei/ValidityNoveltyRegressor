@@ -22,6 +22,8 @@ if __name__ == "__main__":
                                                     "MUST CONTAIN \"Premise\" and \"Conclusion\"-column")
     arg_parser.add_argument("length", type=int, help="The maximum token length of an sample input",
                             nargs="?", default=100)
+    arg_parser.add_argument("--batch_size", default=32, type=int, required=False,
+                            help="How many samples should be processed at once")
 
     parsed_args = arg_parser.parse_args()
 
@@ -57,7 +59,13 @@ if __name__ == "__main__":
                                                        return_tensors="pt"))
 
         out_validity = output.validity.tolist()
+        if not isinstance(out_validity, List):
+            out_validity = [out_validity]
+
         out_novelty = output.novelty.tolist()
+        if not isinstance(out_novelty, List):
+            out_novelty = [out_novelty]
+
         logger.info("Processed successfully {} samples (mean-val: {}/mean-nov: {}//{})",
                     len(batch[0]),
                     round(sum(out_validity)/len(out_validity), 2), round(sum(out_novelty)/len(out_novelty), 2),
@@ -70,7 +78,7 @@ if __name__ == "__main__":
 
         batch_part[0].append(row["Premise"] if row.notna()["Premise"] else "failure")
         batch_part[1].append(row["Conclusion"] if row.notna()["Conclusion"] else "failure")
-        if len(batch_part[0]) < 32:
+        if len(batch_part[0]) < parsed_args.batch_size:
             logger.trace("Just add it to the batch")
             continue
 
