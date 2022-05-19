@@ -158,7 +158,8 @@ if __name__ == "__main__":
                 parsed_args_arct = arg_ARCT.parse_args(
                     args.use_ARCT[1:].split("#") if args.use_ARCT.startswith("#") else args.use_ARCT.split("#")
                 )
-                for split in (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
+                for split in \
+                        (["train", "dev", "test"] if parsed_args_arct.split == "all" else [parsed_args_arct.split]):
                     train += load_arct(
                         split=parsed_args_arct.split, tokenizer=tokenizer,
                         max_length_sample=parsed_args_arct.max_length_sample,
