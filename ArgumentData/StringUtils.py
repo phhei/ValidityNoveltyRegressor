@@ -5,16 +5,21 @@ import nltk
 import torch
 import bert_score
 
-from typing import Optional, Tuple, Literal
+from typing import Optional, Tuple, Literal, Any
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 from loguru import logger
 
 from nltk import sent_tokenize, word_tokenize, pos_tag_sents
 from nltk.corpus import wordnet
 
+import spacy
+import collections
+from pattern.text.en import tenses as f_tenses, conjugate as f_conjugate
+
 paraphrase_model: Optional[Tuple[PegasusTokenizer, PegasusForConditionalGeneration]] = None
 summarization_model: Optional[Tuple[PegasusTokenizer, PegasusForConditionalGeneration]] = None
 bertscore_model: Optional[bert_score.BERTScorer] = None
+spacy_nlp: Optional[Any] = None
 
 
 def paraphrase(text: str, temperature: Optional[float] = None,
@@ -278,3 +283,178 @@ def wordnet_changes_text(text: str, direction: Literal["more_concrete", "more_ge
                                     maximum_synsets_to_fix=maximum_synsets_to_fix)
 
     return final_ret if len(final_ret) >= 1 else text
+
+
+def negate(text: str) -> str:
+    global spacy_nlp
+
+    logger.trace("This inverting-negation-code bases on "
+                 "https://github.com/1itttlesheep/Factuality-evaluation-in-MT_Zuojun/"
+                 "blob/3d24f4e1ed1419d57a26976a9d395ee74c8c92ae/checklist_generate/checklist/perturb.py")
+
+    text = text.replace("e.g.", "for example")
+    try:
+        text_list = sent_tokenize(text)
+    except LookupError:
+        logger.opt(exception=False).warning("Some nltk-resources are missing to determine the amount of sentences")
+        text_list = [text]
+
+    if len(text_list) >= 2:
+        logger.info("You have more than one sentence ({}). Negating several sentence may lead to incorrect results.",
+                    len(text_list))
+
+    if spacy_nlp is None:
+        logger.warning("The spacy-pipeline isn't initialized yet - will change this now!")
+        spacy_nlp = spacy.load("en_core_web_sm")
+
+    def negate_sentence(text_sentence: str) -> str:
+        def remove_negation(doc):
+            """Removes negation from doc.
+            This is experimental, may or may not work.
+            Parameters
+            ----------
+            doc : spacy.token.Doc
+                input
+            Returns
+            -------
+            string
+                With all negations removed
+            """
+            # This removes all negations in the doc. I should maybe add an option to remove just some.
+            notzs = [i for i, z in enumerate(doc) if z.lemma_ == 'not' or z.dep_ == 'neg']
+            new = []
+            for notz in notzs:
+                before = doc[notz - 1] if notz != 0 else None
+                after = doc[notz + 1] if len(doc) > notz + 1 else None
+                if (after and after.pos_ == 'PUNCT') or (before and before.text in ['or']):
+                    continue
+                new.append(notz)
+            notzs = new
+            if not notzs:
+                return None
+            ret = ''
+            start = 0
+            for i, notz in enumerate(notzs):
+                id_start = notz
+                to_add = ' '
+                id_end = notz + 1
+                before = doc[notz - 1] if notz != 0 else None
+                after = doc[notz + 1] if len(doc) > notz + 1 else None
+                if before and before.lemma_ in ['will', 'can', 'do']:
+                    id_start = notz - 1
+                    tenses = collections.Counter([x[0] for x in f_tenses(before.text)]).most_common(1)
+                    tense = tenses[0][0] if len(tenses) else 'present'
+                    p = tenses(before.text)
+                    params = [tense, 3]
+                    if p:
+                        tmp = [x for x in p if x[0] == tense]
+                        if tmp:
+                            params = list(tmp[0])
+                        else:
+                            params = list(p[0])
+                    to_add = ' ' + f_conjugate(before.lemma_, *params) + ' '
+                if before and after and before.lemma_ == 'do' and after.pos_ == 'VERB':
+                    id_start = notz - 1
+                    tenses = collections.Counter([x[0] for x in f_tenses(before.text)]).most_common(1)
+                    tense = tenses[0][0] if len(tenses) else 'present'
+                    p = f_tenses(before.text)
+                    params = [tense, 3]
+                    if p:
+                        tmp = [x for x in p if x[0] == tense]
+                        if tmp:
+                            params = list(tmp[0])
+                        else:
+                            params = list(p[0])
+                    to_add = ' ' + f_conjugate(after.text, *params) + ' '
+                    id_end = notz + 2
+                ret += doc[start:id_start].text + to_add
+                start = id_end
+            ret += doc[id_end:].text
+            return ret
+
+        def add_negation(doc):
+            """Adds negation to doc
+            This is experimental, may or may not work. It also only works for specific parses.
+            Parameters
+            ----------
+            doc : spacy.token.Doc
+                input
+            Returns
+            -------
+            string
+                With negations added
+            """
+            for sentence in doc.sents:
+                if len(sentence) < 3:
+                    continue
+                root_id = [x.i for x in sentence if x.dep_ == 'ROOT'][0]
+                root = doc[root_id]
+                if '?' in sentence.text and sentence[0].text.lower() == 'how':
+                    continue
+                if root.lemma_.lower() in ['thank', 'use']:
+                    continue
+                if root.pos_ not in ['VERB', 'AUX']:
+                    continue
+                neg = [True for x in sentence if x.dep_ == 'neg' and x.head.i == root_id]
+                if neg:
+                    continue
+                if root.lemma_ == 'be':
+                    if '?' in sentence.text:
+                        continue
+                    if root.text.lower() in ['is', 'was', 'were', 'am', 'are', '\'s', '\'re', '\'m']:
+                        return doc[:root_id + 1].text + ' not ' + doc[root_id + 1:].text
+                    else:
+                        return doc[:root_id].text + ' not ' + doc[root_id:].text
+                else:
+                    aux = [x for x in sentence if x.dep_ in ['aux', 'auxpass'] and x.head.i == root_id]
+                    if aux:
+                        aux = aux[0]
+                        if aux.lemma_.lower() in ['can', 'do', 'could', 'would', 'will', 'have', 'should']:
+                            lemma = doc[aux.i].lemma_.lower()
+                            if lemma == 'will':
+                                fixed = 'won\'t'
+                            elif lemma == 'have' and doc[aux.i].text in ['\'ve', '\'d']:
+                                fixed = 'haven\'t' if doc[aux.i].text == '\'ve' else 'hadn\'t'
+                            elif lemma == 'would' and doc[aux.i].text in ['\'d']:
+                                fixed = 'wouldn\'t'
+                            else:
+                                fixed = doc[aux.i].text.rstrip('n') + 'n\'t' if lemma != 'will' else 'won\'t'
+                            fixed = ' %s ' % fixed
+                            return doc[:aux.i].text + fixed + doc[aux.i + 1:].text
+                        return doc[:root_id].text + ' not ' + doc[root_id:].text
+                    else:
+                        # TODO: does, do, etc. Remover return None de cima
+                        subj = [x for x in sentence if x.dep_ in ['csubj', 'nsubj']]
+                        p = f_tenses(root.text)
+                        tenses = collections.Counter([x[0] for x in f_tenses(root.text)]).most_common(1)
+                        tense = tenses[0][0] if len(tenses) else 'present'
+                        params = [tense, 3]
+                        if p:
+                            tmp = [x for x in p if x[0] == tense]
+                            if tmp:
+                                params = list(tmp[0])
+                            else:
+                                params = list(p[0])
+                        if root.tag_ not in ['VBG']:
+                            do = f_conjugate('do', *params) + 'n\'t'
+                            new_root = f_conjugate(root.text, tense='infinitive')
+                        else:
+                            do = 'not'
+                            new_root = root.text
+                        return '%s %s %s %s' % (doc[:root_id].text, do, new_root, doc[root_id + 1:].text)
+
+        s_nlp = spacy_nlp(text_sentence)
+        logger.trace("Processed sentence \"{}\" ({})", text_sentence, s_nlp.vector)
+        ret = remove_negation(s_nlp)
+        if ret is None:
+            logger.debug("Remove-negation failed in \"{}\" - no negation found, hence, add negation.", text_sentence)
+            ret = add_negation(s_nlp)
+            if ret is None:
+                logger.warning("Failed to negate \"{}\" - jump to default case", text_sentence)
+                return "It's not the case that {}{}".format(text_sentence[0].lower(), text_sentence[1:])
+
+        return ret
+
+    logger.trace("OK, let's start processing \"{}\"", text)
+
+    return " ".join(map(lambda s: negate_sentence(s), text_list))

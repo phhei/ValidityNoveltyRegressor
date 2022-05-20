@@ -7,7 +7,7 @@ from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.Utils import truncate_df
 
 dev_path = "ArgumentData/ValTest/dev_better_balanced.csv"
-test_path = "ArgumentData/ValTest/test_better_balanced.csv"
+test_path = "ArgumentData/ValTest/test_better_balanced-with-dev-topics.csv"
 data_path = "ArgumentData/ValTest/validity_novelty_corpus.csv"
 comparative_path = "ArgumentData/ValTest/validity_novelty_corpus-comparative.csv"
 

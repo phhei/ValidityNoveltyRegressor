@@ -19,7 +19,7 @@ from torch.utils.data.dataset import T_co
 from transformers import PreTrainedTokenizer, AutoTokenizer
 
 from ArgumentData.StringUtils import paraphrase, summarize, add_prefix, \
-    remove_non_content_words_manipulate_punctuation, wordnet_changes_text
+    remove_non_content_words_manipulate_punctuation, wordnet_changes_text, negate
 from HGTrainer import _val_nov_metric
 
 
@@ -57,11 +57,37 @@ class ValidityNoveltyDataset(Dataset):
 
         def automatically_create_non_valid_non_novel_sample(self, other_random_sample: Optional[Any] = None):
             if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
-                raise NotImplementedError("Negation script is not implemented until yet")
+                include_paraphrase = random.choice([True, False])
+                premises = [self.premise,
+                            paraphrase(negate(self.conclusion)) if include_paraphrase else negate(self.conclusion)]
+                random.shuffle(premises)
+                return ValidityNoveltyDataset.Sample(
+                    premise=" ".join(premises),
+                    conclusion=self.conclusion,
+                    validity=.1 * self.validity * int(include_paraphrase),
+                    novelty=0.05*int(include_paraphrase),
+                    weight=self.weight * (.9-.15 * int(include_paraphrase))
+                )
             elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
-                raise NotImplementedError("Negation script is not implemented until yet")
+                return ValidityNoveltyDataset.Sample(
+                    premise=self.premise,
+                    conclusion=negate(self.conclusion),
+                    validity=(1-self.validity)**2,
+                    novelty=self.novelty,
+                    weight=.9 * self.weight
+                )
             elif not self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
-                raise NotImplementedError("Negation script is not implemented until yet")
+                include_paraphrase = random.choice([True, False])
+                premises = [self.premise,
+                            paraphrase(negate(self.conclusion)) if include_paraphrase else negate(self.conclusion)]
+                random.shuffle(premises)
+                return ValidityNoveltyDataset.Sample(
+                    premise=" ".join(premises),
+                    conclusion=self.conclusion,
+                    validity=0,
+                    novelty=0.05*int(include_paraphrase),
+                    weight=self.weight * (.9 - .15 * int(include_paraphrase))
+                )
             elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
                 selection = random.randint(1, 3+int(other_random_sample is not None))
                 if selection == 1:
@@ -129,7 +155,13 @@ class ValidityNoveltyDataset(Dataset):
 
         def automatically_create_non_valid_novel_sample(self):
             if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
-                raise NotImplementedError("Negation (premise or conclusion) script is not implemented until yet")
+                return ValidityNoveltyDataset.Sample(
+                    premise=self.premise,
+                    conclusion=negate(self.conclusion),
+                    validity=(1-self.validity)**2,
+                    novelty=max(.5, .9*self.novelty),
+                    weight=.25 * self.weight
+                )
             elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
                 raise NotImplementedError("???")
             elif not self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
