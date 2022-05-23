@@ -22,6 +22,7 @@ bertscore_model: Optional[bert_score.BERTScorer] = None
 spacy_nlp: Optional[Any] = None
 
 
+# noinspection PyBroadException
 def paraphrase(text: str, temperature: Optional[float] = None,
                paraphrase_model_name: str = "tuner007/pegasus_paraphrase", avoid_equal_return: bool = True,
                maximize_dissimilarity: bool = False, fast: bool = False) -> str:
@@ -115,6 +116,7 @@ def paraphrase(text: str, temperature: Optional[float] = None,
     return paraphrases[0]
 
 
+# noinspection PyBroadException
 def summarize(text: str, text_pair: Optional[str] = None, summarization_model_name: str = "google/pegasus-xsum",
               temperature: Optional[float] = None, fast: bool = False) -> str:
     logger.trace("WARNING! Summarizing argumentative text can conclude... into a conclusion or some strange added/ "
@@ -253,7 +255,7 @@ def wordnet_changes_text(text: str, direction: Literal["more_concrete", "more_ge
                                 final_ret += " {}".format(token) if len(final_ret) >= 1 else token
                         elif 1 <= len(synsets) <= maximum_synsets_to_fix:
                             logger.trace("1 <= {} synsets <= {}", len(synsets), maximum_synsets_to_fix)
-                            synset = random.choice(synsets)
+                            synset = random.choice([synsets[0]]*math.ceil(len(synsets)/2) + synsets)
                             logger.debug("We pick the synset \"{}\" - {}", synset.name(), synset.definition())
                             if direction == "more_general":
                                 synset = random.choice(h) if len(h := synset.hypernyms()) >= 1 else synset
@@ -332,7 +334,7 @@ def negate(text: str) -> str:
             notzs = new
             if not notzs:
                 return None
-            ret = ''
+            f_ret = ''
             start = 0
             for i, notz in enumerate(notzs):
                 id_start = notz
@@ -367,10 +369,10 @@ def negate(text: str) -> str:
                             params = list(p[0])
                     to_add = ' ' + f_conjugate(after.text, *params) + ' '
                     id_end = notz + 2
-                ret += doc[start:id_start].text + to_add
+                f_ret += doc[start:id_start].text + to_add
                 start = id_end
-            ret += doc[id_end:].text
-            return ret
+            f_ret += doc[id_end:].text
+            return f_ret
 
         def add_negation(doc):
             """Adds negation to doc
