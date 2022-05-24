@@ -4,7 +4,8 @@ import pandas
 
 from transformers import PreTrainedTokenizer
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
-from ArgumentData.Utils import truncate_df
+from ArgumentData.Sample import Sample
+from ArgumentData.Utils import truncate_dataset
 
 train_path = "ArgumentData/ARCT/train-full.tsv"
 train_path_adversarial = "ArgumentData/ARCT/adversarial_dataset/train-adv-negated.tsv"
@@ -20,7 +21,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                  include_adversarial_data: bool = True,
                  max_length_sample: Optional[int] = None, max_number: int = -1,
                  include_topic: bool = False, include_debate_info: bool = False,
-                 continuous_val_nov: bool = True, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
+                 continuous_val_nov: bool = False, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
     if split == "train":
         selected_data_path = train_path
         selected_data_path_adversarial = train_path_adversarial
@@ -71,7 +72,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
     claim_map_df = pandas.read_csv(claim_map, index_col="original")
     logger.trace("Loaded {} negated claims", claim_map_df)
 
-    data_df = truncate_df(df, max_number)
+    data_df = truncate_dataset(df, max_number)
 
     samples = []
 
@@ -82,7 +83,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
 
             logger.trace("Let's add a standard sample (valid and novel)")
             samples.append(
-                ValidityNoveltyDataset.Sample(
+                Sample(
                     premise="{}{}{} {}".format(
                         "{}: ".format(row_data["debateTitle"]) if include_topic else "",
                         "({}) ".format(row_data["debateInfo"]) if include_debate_info else "",
@@ -99,7 +100,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
 
             logger.trace("Let's mess up: destroy the validity with the false warrant!")
             samples.append(
-                ValidityNoveltyDataset.Sample(
+                Sample(
                     premise="{}{}{} {}".format(
                         "{}: ".format(row_data["debateTitle"]) if include_topic else "",
                         "({}) ".format(row_data["debateInfo"]) if include_debate_info else "",
@@ -117,7 +118,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
             logger.trace("No let's destroy the novelty, too!")
             try:
                 samples.append(
-                    ValidityNoveltyDataset.Sample(
+                    Sample(
                         premise="{}{}{} {}".format(
                             "{}: ".format(row_data["debateTitle"]) if include_topic else "",
                             "({}) ".format(row_data["debateInfo"]) if include_debate_info else "",
@@ -131,7 +132,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                     )
                 )
                 samples.append(
-                    ValidityNoveltyDataset.Sample(
+                    Sample(
                         premise="{}{}{} {}".format(
                             "{}: ".format(row_data["debateTitle"]) if include_topic else "",
                             "({}) ".format(row_data["debateInfo"]) if include_debate_info else "",
@@ -145,7 +146,7 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
                     )
                 )
                 samples.append(
-                    ValidityNoveltyDataset.Sample(
+                    Sample(
                         premise="{}{}{} {}".format(
                             "{}: ".format(row_data["debateTitle"]) if include_topic else "",
                             "({}) ".format(row_data["debateInfo"]) if include_debate_info else "",

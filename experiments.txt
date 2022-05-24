@@ -1,0 +1,37 @@
+1. Validity-Novelty-Classification ist ohne prior background knowledge kaum machbar (sehr hartes Test-Set)
+2. Man kann synthetisch Trainingsdaten erstellen, die helfen
+   1. Je vielfältiger die synthetischen Quellen, desto besser
+   2. Je mehr die synthetischen Daten, desto besser
+3. Zusätzliche Techniken helfen das Ergebnis weiter zu pushen
+   ~~1. sample-data-class-balancing (on/out)~~
+   2. adaptive Weights (on/out)
+   3. (smooth Val/nov in Trainingdata (on/out))
+   4. (Aus dem active learning: warm-start)
+
+
+Was wir schon mal festsetzen können:
+-t roberta-large -bs 64 -lr 3e-5 -v --equalize_source_distribution --save --analyse train dev test --use_ValTest \#--continuous_sample_weight -s \#-\n#XXX\#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1\#--automatic_samples
+
+2: Man kann synthetisch Trainingsdaten erstellen, die helfen
+- ExplaGraphs: --use_ExplaGraphs
+- IBM: --use_IBM
+- Essays: --use_essays \#--include_samples_without_detail_annotation_info
+- ARCT: --use_ARCT
+- ARCTUKW: --use_ARCTUKW
+- Original: ???
+
+                                            100         1.000           10.000          100.000
+ExplaGraphs                              119232        119244           119245           119246
+ExplaGraphs+IBM                          119233
+ExplaGraphs+Essays                       119235
+ExplaGraphs+IBM+Essays                   119234
+ARCT+ARCTUKW                             119236        119243
+ARCT+ARCTUKW+IBM                         119237
+ARCT+ARCTUKW+Essays                      119239
+ARCT+ARCTUKW+IBM+Essays                  119238
+ExplaGraphs+ARCT+ARCTUKW                 119241        119242
+ExplaGraphs+ARCT+ARCTUKW+IBM+Essays      119240
+Original
+Original+ExplaGraphs
+Original+ARCT+ARCTUKW
+Original+ARCT+ARCTUKW+IBM+Essays

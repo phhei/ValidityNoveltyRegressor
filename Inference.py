@@ -24,6 +24,10 @@ if __name__ == "__main__":
                             nargs="?", default=100)
     arg_parser.add_argument("--batch_size", default=32, type=int, required=False,
                             help="How many samples should be processed at once")
+    arg_parser.add_argument("--exclude_premise", action="store_true", required=False, default=False,
+                            help="Fool test - exclude the premise at inference time")
+    arg_parser.add_argument("--exclude_conclusion", action="store_true", required=False, default=False,
+                            help="Fool test - exclude the conclusion at inference time")
 
     parsed_args = arg_parser.parse_args()
 
@@ -76,8 +80,12 @@ if __name__ == "__main__":
     for row_id, row in df.iterrows():
         logger.trace("Process line {}", row_id)
 
-        batch_part[0].append(row["Premise"] if row.notna()["Premise"] else "failure")
-        batch_part[1].append(row["Conclusion"] if row.notna()["Conclusion"] else "failure")
+        batch_part[0].append(
+            "" if parsed_args.exclude_premise else (row["Premise"] if row.notna()["Premise"] else "failure")
+        )
+        batch_part[1].append(
+            "" if parsed_args.exclude_conclusion else  (row["Conclusion"] if row.notna()["Conclusion"] else "failure")
+        )
         if len(batch_part[0]) < parsed_args.batch_size:
             logger.trace("Just add it to the batch")
             continue
@@ -94,7 +102,9 @@ if __name__ == "__main__":
         logger.warning("There are still {} samples left (not full batch) - process it...", len(batch_part[0]))
         process(batch_part)
 
-    out_path = data.parent.joinpath("{}_{}.csv".format(data.stem, model.stem))
+    out_path = data.parent.joinpath("{}_{}{}{}.csv".format(data.stem, model.stem,
+                                                           "-woPrem" if parsed_args.exclude_premise else "",
+                                                           "-woConc" if parsed_args.exclude_conclusion else ""))
     df["predicted validity"] = validity
     df["predicted novelty"] = novelty
     df.to_csv(path_or_buf=str(out_path.absolute()), encoding="utf-8", index=False)

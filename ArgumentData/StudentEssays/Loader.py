@@ -7,7 +7,8 @@ from nltk import sent_tokenize
 from transformers import PreTrainedTokenizer
 
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
-from ArgumentData.Utils import truncate_df
+from ArgumentData.Sample import Sample
+from ArgumentData.Utils import truncate_dataset
 
 annotation_file = "ArgumentData/StudentEssays/sufficient/annotations.csv"
 main_file = "ArgumentData/StudentEssays/sufficient/all-samples.tsv"
@@ -16,7 +17,7 @@ essays_path = "ArgumentData/StudentEssays/essays"
 
 def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int] = None,
                  max_number: int = -1, exclude_samples_without_detail_annotation_info: bool = True,
-                 continuous_val_nov: bool = True, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
+                 continuous_val_nov: bool = False, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
     main_df = pandas.read_csv(main_file, sep="\t", encoding_errors="ignore", index_col=["ESSAY", "ARGUMENT"])
     main_df.fillna(value="sufficient", inplace=True)
     details = pandas.read_csv(annotation_file, sep=";", quoting=1, index_col=["ESSAY", "ARGUMENT"])
@@ -44,7 +45,7 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
         main_df = main_df[main_df.notna().all(axis="columns")]
         logger.info("Excluded samples without any details od annotation, having {} left", len(main_df))
 
-    main_df = truncate_df(main_df, max_number=max_number)
+    main_df = truncate_dataset(main_df, max_number=max_number)
 
     samples = []
 
@@ -82,7 +83,7 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
                          sid, premise, claim, major_claim)
 
             if sum((int(len(premise) >= 1), int(len(claim) >= 1), int(len(major_claim) >= 1))) >= 2:
-                samples.append(ValidityNoveltyDataset.Sample(
+                samples.append(Sample(
                     premise=(premise + " " + claim) if len(major_claim) >= 1 else premise,
                     conclusion=major_claim if len(major_claim) >= 1 else claim,
                     validity=int(row["ANNOTATION"] == "sufficient") if not continuous_val_nov or pandas.isna(row["A1"])

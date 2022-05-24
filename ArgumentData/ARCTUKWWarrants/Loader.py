@@ -5,7 +5,8 @@ from loguru import logger
 from transformers import PreTrainedTokenizer
 
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
-from ArgumentData.Utils import truncate_df
+from ArgumentData.Sample import Sample
+from ArgumentData.Utils import truncate_dataset
 
 path = "ArgumentData/ARCTUKWWarrants/final_data_with_hr.csv"
 
@@ -13,7 +14,7 @@ path = "ArgumentData/ARCTUKWWarrants/final_data_with_hr.csv"
 def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int] = None,
                  max_number: int = -1, mace_ibm_threshold: Optional[float] = None,
                  include_topic: bool = False,
-                 continuous_val_nov: bool = True, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
+                 continuous_val_nov: bool = False, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
     df = pandas.read_csv(path)
     logger.info("Load {} lines from \"{}\"", len(df), path)
 
@@ -33,14 +34,14 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
             df = df[df.mace_ibm >= mace_ibm_threshold]
             logger.success("Filtered low-qualitative successfully, {} remain", len(df))
 
-    df = truncate_df(df, max_number=max_number)
+    df = truncate_dataset(df, max_number=max_number)
 
     samples = []
 
     for sid, row in df.iterrows():
         logger.trace("Let's generate samples for the {}. line", sid)
         try:
-            samples.append(ValidityNoveltyDataset.Sample(
+            samples.append(Sample(
                 premise="{}{}".format("{}: ".format(row["topic"]) if include_topic else "", row["premise"]),
                 conclusion=row["claim"],
                 validity=.75 + .25*row["mace_ibm"] if continuous_val_nov else 1,
@@ -50,7 +51,7 @@ def load_dataset(tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int
                 source="ARCTUKW[Premise->Conclusion]"
             ))
 
-            samples.append(ValidityNoveltyDataset.Sample(
+            samples.append(Sample(
                 premise="{}{} {} {} {}".format(
                     "{}: ".format(row["topic"]) if include_topic else "", row["premise"],
                     row["claim_keyword"], row["hidden_reasoning_keyword"], row["premise_keyword"]

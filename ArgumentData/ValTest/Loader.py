@@ -4,7 +4,8 @@ import pandas
 
 from transformers import PreTrainedTokenizer
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
-from ArgumentData.Utils import truncate_df
+from ArgumentData.Sample import Sample
+from ArgumentData.Utils import truncate_dataset
 
 dev_path = "ArgumentData/ValTest/dev_better_balanced.csv"
 test_path = "ArgumentData/ValTest/test_better_balanced-with-dev-topics.csv"
@@ -14,7 +15,7 @@ comparative_path = "ArgumentData/ValTest/validity_novelty_corpus-comparative.csv
 
 def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int] = None,
                  max_number: int = -1, deduplicate: bool = True, include_topic: bool = True,
-                 continuous_val_nov: bool = True, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
+                 continuous_val_nov: bool = False, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
     df = pandas.read_csv(data_path, sep="|", index_col="argument_ID", quotechar=None, quoting=3)
     df_comparative = pandas.read_csv(comparative_path,
                                      sep="|", index_col="argument_sample_ID", quotechar=None, quoting=3)
@@ -23,7 +24,7 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
 
     logger.info("Loaded {} samples from \"{}\"", len(data_df), data_path)
 
-    data_df = truncate_df(data_df, max_number)
+    data_df = truncate_dataset(data_df, max_number)
 
     samples = []
 
@@ -78,7 +79,7 @@ def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, 
                              * (2. / (2 * num_voters)))
             else:
                 weight = 3
-            samples.append(ValidityNoveltyDataset.Sample(
+            samples.append(Sample(
                 premise="{}: {}".format(row_data["topic"], row_data["premise"])
                 if include_topic else row_data["premise"],
                 conclusion=row_data["conclusion_text"],

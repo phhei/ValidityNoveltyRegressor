@@ -7,7 +7,8 @@ import itertools
 from transformers import PreTrainedTokenizer
 from functools import reduce
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
-from ArgumentData.Utils import truncate_df
+from ArgumentData.Sample import Sample
+from ArgumentData.Utils import truncate_dataset
 
 from nltk import word_tokenize
 
@@ -23,7 +24,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
     data = pandas.read_csv(filepath_or_buffer=train_path if split == "train" else dev_path,
                            sep="\t", quotechar=None, quoting=3, header=None,
                            names=["Conclusion", "Premise", "Stance", "ExplaGraph"])
-    data = truncate_df(data, max_number)
+    data = truncate_dataset(data, max_number)
 
     logger.info("Loaded {} samples", len(data))
 
@@ -134,7 +135,7 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
 
         logger.trace("Having all components together, creating the sample now!")
 
-        samples.append(ValidityNoveltyDataset.Sample(
+        samples.append(Sample(
             premise=premise,
             conclusion=conclusion,
             validity=validity+validity_adjustment_multiplicative*validity_corrective,
@@ -148,13 +149,13 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
 
         if generate_non_novel_non_valid_samples_by_random:
             logger.trace("We have to create a nonsense-sample for row {}, too", sid)
-            samples.append(ValidityNoveltyDataset.Sample(
+            samples.append(Sample(
                 premise=premise,
                 conclusion=data["Conclusion"].sample(n=1, random_state=hash(sid)).iloc[0],
                 validity=0,
                 novelty=0,
                 weight=.5 if continuous_sample_weight else 2,
-                source="ExplaGrpahs[Argument-->RandomBelief]"
+                source="ExplaGraphs[Argument-->RandomBelief]"
             ))
             logger.debug("Nonsense-sample generated: {}", samples[-1])
 

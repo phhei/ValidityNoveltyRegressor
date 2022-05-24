@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from shutil import move
 from pprint import pformat
+from typing import Dict
 
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
@@ -18,7 +19,7 @@ from loguru import logger
 import transformers
 import argparse
 
-VERSION: str = "V0.1.3"
+VERSION: str = "V0.2.0"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -67,15 +68,27 @@ if __name__ == "__main__":
                            "(bias) unless you want to handle the validation data as training data as well")
     argv.add_argument("--generate_more_training_samples", action="store_true", default=False, required=False,
                       help="Forces the training set to automatically generate (more) samples")
-    argv.add_argument("--cold_start", action="store_true", default=False,  required=False,
-                      help="Shuffles the training data before processing it "
-                           "(with the https://huggingface.co/docs/transformers/v4.17.0/en/main_classes/"
-                           "optimizer_schedules#transformers.get_cosine_schedule_with_warmup)")
-    argv.add_argument("--warm_start", action="store_true", default=False,  required=False,
-                      help="Do a representative clustering + weighting to have an informed training start")
+    argv.add_argument("--random_truncation", action="store_true", default=False, required=False,
+                      help="Shuffles the data before truncating it if an restricted number to use from a "
+                           "chosen source is given.")
+    argv.add_argument("--intelligent_truncation", action="store_true", default=False, required=False,
+                      help="Do a representative clustering + weighting before truncating data if a restricted "
+                           "number to use from a chosen source is given - hence, cherry-picks the samples")
+    argv.add_argument("--equalize_source_distribution", action="append", nargs="?", type=str, default=[],
+                      const="train", required=False,
+                      help="Forces the train-split (or other splits if defined) to have an equalized sample "
+                           "source distribution. This is done BEFORE sampling")
     argv.add_argument("-s", "--sample", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="Rescale the training data - You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
+    argv.add_argument("--cold_start", action="store_true", default=False, required=False,
+                      help="Shuffles the training data before processing it "
+                           "(with the https://huggingface.co/docs/transformers/v4.17.0/en/main_classes/"
+                           "optimizer_schedules#transformers.get_cosine_schedule_with_warmup). "
+                           "This is done AFTER sampling -- not implemented until yet.")
+    argv.add_argument("--warm_start", action="store_true", default=False, required=False,
+                      help="Do a representative clustering + weighting to have an informed training start."
+                           "This done AFTER sampling -- not implemented until yet.")
     argv.add_argument("-skip", "--skip_training", action="store_true", default=False,  required=False,
                       help="If you want to skip the training (directly to testing), take this argument!")
     argv.add_argument("--save", action="store", nargs="?", type=str, default="n/a", required=False,
@@ -96,10 +109,10 @@ if __name__ == "__main__":
         dev = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Eval")
         test = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Test")
 
-        if args.cold_start or args.warm_start:
-            Utils.sampling_technique = "mixed" if args.cold_start and args.warm_start else \
-                ("most informative" if args.warm_start else "random")
-            logger.info("You changed the sampling technique (if you need less samples from a dataset) to: {}",
+        if args.random_truncation or args.intelligent_truncation:
+            Utils.sampling_technique = "mixed" if args.random_truncation and args.intelligent_truncation else \
+                ("most informative" if args.intelligent_truncation else "random")
+            logger.info("You changed the truncation technique (if you need less samples from a dataset) to: {}",
                         Utils.sampling_technique)
 
         if args.use_ExplaGraphs != "n/a":
@@ -310,7 +323,24 @@ if __name__ == "__main__":
         samples_generated = train.generate_more_samples()
         logger.info("Training set has the size of {} (+{}) now ({})", len(train), samples_generated,
                     train.get_sample_class_distribution(for_original_data=True))
-        train.reset_to_original_data()
+
+    for split in args.equalize_source_distribution:
+        logger.info("Ok, you want to equalize the sample-source-distribution of the \"{}\"-split", split)
+        result = None
+        if "train" in split:
+            result = train.equalize_source_distribution()
+        elif "dev" in split:
+            result = dev.equalize_source_distribution()
+        elif "test" in split:
+            result = test.equalize_source_distribution()
+
+        if result is None:
+            logger.warning("Your defined split \"{}\" was not found -- "
+                           "please chose among \"train\", \"dev\" and \"test\"", split)
+        elif result:
+            logger.success("Successfully equalize the source distribution of the \"{}\"-split", split)
+        else:
+            logger.warning("Split \"{}\" is not source-equalized!", split)
 
     if args.sample != "n/a":
         logger.info("You want to sample your training data ({})", len(train))
@@ -332,7 +362,7 @@ if __name__ == "__main__":
             final_train_samples = train.sample(
                 number_or_fraction=parsed_args_sample.number if parsed_args_sample.number is not None else
                 (parsed_args_sample.fraction if parsed_args_sample.fraction is not None else 1.),
-                forced_balanced_dataset=parsed_args_sample.not_forced_balanced_dataset,
+                forced_balanced_class_distribution=parsed_args_sample.not_forced_balanced_dataset,
                 force_classes=parsed_args_sample.not_forced_balanced_dataset
                 if parsed_args_sample.classes == "n/a" else
                 (True if len(parsed_args_sample.classes) == 0 else
@@ -458,14 +488,32 @@ if __name__ == "__main__":
                          "since we're leaving the training procedure, we don't need them anymore.", removed_cb)
 
     if len(test) >= 10:
-        test_metrics = trainer.metrics_format(
+        logger.info("OK, let's test the best model with: {}", test)
+        test_metrics: Dict = trainer.metrics_format(
             metrics=trainer.evaluate(eval_dataset=test,
                                      ignore_keys=["logits", "loss", "hidden_states", "attentions"],
                                      metric_key_prefix="test")
         )
+        test.include_premise = False
+        logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}", test)
+        test_metrics.update(trainer.metrics_format(
+            metrics=trainer.evaluate(eval_dataset=test,
+                                     ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                     metric_key_prefix="test_wo_premise")
+        ))
+        test.include_premise = True
+        test.include_conclusion = False
+        logger.debug("Another clever-hans-check. Let's continue with the fool-test: {}", test)
+        test_metrics.update(trainer.metrics_format(
+            metrics=trainer.evaluate(eval_dataset=test,
+                                     ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                     metric_key_prefix="test_wo_conclusion")
+        ))
+        test.include_premise = True
+        test.include_conclusion = True
 
         try:
-            logger.success("Test on {} test samples: {}", len(test),
+            logger.success("Test 3 times on {} test samples: {}", len(test),
                            ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
         except TypeError:
             logger.opt(exception=False).warning("Strange test-metrics-outputs-dict. Should be str->float, "
@@ -475,6 +523,7 @@ if __name__ == "__main__":
 
     if args.save != "n/a" and args.save != "no-model":
         logger.debug("You want to save the model")
+        # noinspection PyBroadException
         try:
             trainer.save_model()
             logger.success("Successfully stored the model in: {}", output_dir)
