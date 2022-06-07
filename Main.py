@@ -9,7 +9,7 @@ from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData import Utils
 from ArgumentData.ExplaGraphs.Loader import load_dataset as load_explagraphs
-from ArgumentData.ValTest.Loader import load_dataset as load_valtest
+from ArgumentData.ValidityNoveltySharedTask.Loader import load_dataset as load_annotation
 from ArgumentData.ARCT.Loader import load_dataset as load_arct
 from ArgumentData.ARCTUKWWarrants.Loader import load_dataset as load_arct_ukw
 from ArgumentData.IBMArgQuality.Loader import load_dataset as load_ibm
@@ -19,7 +19,7 @@ from loguru import logger
 import transformers
 import argparse
 
-VERSION: str = "V0.2.0"
+VERSION: str = "V0.3.0"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -60,12 +60,12 @@ if __name__ == "__main__":
                       help="using the the Student-Essays-dataset for training. "
                            "You can provide additional arguments for this dataset by replacing all the whitespaces "
                            "with '#', starting with '#'")
-    argv.add_argument("--use_ValTest", action="store", nargs="?", default="n/a", type=str, required=False,
+    argv.add_argument("--use_annotation_train", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the validation und test set. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
-    argv.add_argument("--use_ValForTrain", action="store_true", default=False, required=False,
-                      help="The ground truth data (dataset annotated with validity and novelty) isn't for training "
-                           "(bias) unless you want to handle the validation data as training data as well")
+    argv.add_argument("--use_annotation_ValTest", action="store", nargs="?", default="n/a", type=str, required=False,
+                      help="using the validation und test set. You can provide additional arguments for this dataset "
+                           "by replacing all the whitespaces with '#', starting with '#'")
     argv.add_argument("--generate_more_training_samples", action="store_true", default=False, required=False,
                       help="Forces the training set to automatically generate (more) samples")
     argv.add_argument("--random_truncation", action="store_true", default=False, required=False,
@@ -266,50 +266,77 @@ if __name__ == "__main__":
                     continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
                 )
 
-        if len(sys.argv) <= 1 or args.use_ValTest != "n/a":
-            if args.use_ValTest != "n/a":
+        ###############################################################################################################
+
+        arg_annotation = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
+        arg_annotation.add_argument("-l", "--max_length_sample", action="store", default=132, type=int,
+                                    required=False)
+        arg_annotation.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
+        arg_annotation.add_argument("-t", "--include_topic", action="store_true", default=False,
+                                    required=False)
+        arg_annotation.add_argument("--min_confidence", action="store", default="defeasible", required=False)
+        arg_annotation.add_argument("--continuous_val_nov", action="store_true", default=False,
+                                    required=False)
+        arg_annotation.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                    required=False)
+        if len(sys.argv) <= 1 or args.use_annotation_train != "n/a":
+            if len(sys.argv) <= 1 or args.use_annotation_train is None:
+                logger.info("OK, let's use the best training data as it is")
+                train += load_annotation(split="train", tokenizer=tokenizer)
+            else:
+                parsed_args_annotation = arg_annotation.parse_args(
+                    args.use_annotation_train[1:].split("#") if args.use_annotation_train.startswith("#")
+                    else args.use_annotation_train.split("#")
+                )
+
+                train += load_annotation(
+                    split="train",
+                    tokenizer=tokenizer,
+                    max_length_sample=parsed_args_annotation.max_length_sample,
+                    max_number=parsed_args_annotation.max_number,
+                    include_topic=parsed_args_annotation.include_topic,
+                    continuous_val_nov=parsed_args_annotation.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
+                    min_confidence=parsed_args_annotation.min_confidence
+                )
+
+        if len(sys.argv) <= 1 or args.use_annotation_ValTest != "n/a":
+            if args.use_annotation_ValTest != "n/a":
                 logger.debug("You want to use the ValTest as a part of the validation/ test set")
             else:
                 logger.info("Default included dataset")
 
-            if len(sys.argv) <= 1 or args.use_ValTest is None:
-                dev_split = load_valtest(split="dev", tokenizer=tokenizer)
-                test_split = load_valtest(split="test", tokenizer=tokenizer)
+            if len(sys.argv) <= 1 or args.use_annotation_ValTest is None:
+                dev += load_annotation(split="dev", tokenizer=tokenizer)
+                test += load_annotation(split="test", tokenizer=tokenizer)
             else:
-                arg_ValTest = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-                arg_ValTest.add_argument("-l", "--max_length_sample", action="store", default=132, type=int,
-                                         required=False)
-                arg_ValTest.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-                arg_ValTest.add_argument("-t", "--include_topic", action="store_true",  default=False,
-                                         required=False)
-                arg_ValTest.add_argument("--continuous_val_nov", action="store_true", default=False,
-                                         required=False)
-                arg_ValTest.add_argument("--continuous_sample_weight", action="store_true", default=False,
-                                         required=False)
-                parsed_args_ValTest = arg_ValTest.parse_args(
-                    args.use_ValTest[1:].split("#") if args.use_ValTest.startswith("#") else args.use_ValTest.split("#")
-                )
-                dev_split = load_valtest(
-                    split="dev", tokenizer=tokenizer,
-                    max_length_sample=parsed_args_ValTest.max_length_sample,
-                    max_number=parsed_args_ValTest.max_number,
-                    include_topic=parsed_args_ValTest.include_topic,
-                    continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
-                    continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
-                )
-                test_split = load_valtest(
-                    split="test", tokenizer=tokenizer,
-                    max_length_sample=parsed_args_ValTest.max_length_sample,
-                    max_number=parsed_args_ValTest.max_number,
-                    include_topic=parsed_args_ValTest.include_topic,
-                    continuous_val_nov=parsed_args_ValTest.continuous_val_nov,
-                    continuous_sample_weight=parsed_args_ValTest.continuous_sample_weight
+                arg_annotation.add_argument("--no_dev_overlap", action="store_true", default=False, required=False)
+                parsed_args_annotation = arg_annotation.parse_args(
+                    args.use_annotation_ValTest[1:].split("#") if args.use_annotation_ValTest.startswith("#")
+                    else args.use_annotation_ValTest.split("#")
                 )
 
-            if args.use_ValForTrain:
-                train += dev_split
-            dev += dev_split
-            test += test_split
+                dev += load_annotation(
+                        split="dev",
+                        tokenizer=tokenizer,
+                        max_length_sample=parsed_args_annotation.max_length_sample,
+                        max_number=parsed_args_annotation.max_number,
+                        include_topic=parsed_args_annotation.include_topic,
+                        continuous_val_nov=parsed_args_annotation.continuous_val_nov,
+                        continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
+                        min_confidence=parsed_args_annotation.min_confidence
+                    )
+
+                test += load_annotation(
+                        split="test_without_dev_topics" if parsed_args_annotation.no_dev_overlap else "test",
+                        tokenizer=tokenizer,
+                        max_length_sample=parsed_args_annotation.max_length_sample,
+                        max_number=parsed_args_annotation.max_number,
+                        include_topic=parsed_args_annotation.include_topic,
+                        continuous_val_nov=parsed_args_annotation.continuous_val_nov,
+                        continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
+                        min_confidence=parsed_args_annotation.min_confidence
+                    )
     else:
         logger.warning("OK, let's load the dataset from \"{}\" (all --use-parameters are ignored)",
                        args.use_preloaded_dataset.name)

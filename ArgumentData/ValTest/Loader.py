@@ -7,12 +7,20 @@ from ArgumentData.GeneralDataset import ValidityNoveltyDataset
 from ArgumentData.Sample import Sample
 from ArgumentData.Utils import truncate_dataset
 
+from deprecated import deprecated
+
 dev_path = "ArgumentData/ValTest/dev_better_balanced.csv"
 test_path = "ArgumentData/ValTest/test_better_balanced-with-dev-topics.csv"
 data_path = "ArgumentData/ValTest/validity_novelty_corpus.csv"
 comparative_path = "ArgumentData/ValTest/validity_novelty_corpus-comparative.csv"
 
 
+@deprecated(
+    reason="Since the shared task of validity-novelty is out now, the data (structure) changed a little bit - "
+           "resulting in a new implementation. Use ArgumentData/ValidityNoveltySharedTask/Loader.py instead.",
+    version="0.3.0",
+    action="error"
+)
 def load_dataset(split: Literal["dev", "test"], tokenizer: PreTrainedTokenizer, max_length_sample: Optional[int] = None,
                  max_number: int = -1, deduplicate: bool = True, include_topic: bool = True,
                  continuous_val_nov: bool = False, continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
