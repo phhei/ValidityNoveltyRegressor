@@ -191,8 +191,8 @@ class ValNovRegressor(torch.nn.Module):
 
         cls_logits = transformer_cls.last_hidden_state[0]
 
-        validity_logits = torch.squeeze(self.regression_layer_validity(cls_logits))
-        novelty_logits = torch.squeeze(self.regression_layer_novelty(cls_logits))
+        validity_logits = self.regression_layer_validity(cls_logits)
+        novelty_logits = self.regression_layer_novelty(cls_logits)
 
         return ValNovOutput(
             logits=torch.stack([validity_logits, novelty_logits]),
@@ -274,8 +274,8 @@ class RobertaForValNovRegression(RobertaForSequenceClassification):
             logger.trace("Found a sample-weights-vector: {}", weights)
 
         out: SequenceClassifierOutput = super().forward(**kwargs)
-        is_validity = self.sigmoid(torch.squeeze(out.logits[:, 0]))
-        is_novelty = self.sigmoid(torch.squeeze(out.logits[:, 1]))
+        is_validity = self.sigmoid(out.logits[:, 0])
+        is_novelty = self.sigmoid(out.logits[:, 1])
 
         return ValNovOutput(
             attentions=out.attentions,

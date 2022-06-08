@@ -516,37 +516,44 @@ if __name__ == "__main__":
 
     if len(test) >= 10:
         logger.info("OK, let's test the best model with: {}", test)
-        test_metrics: Dict = trainer.metrics_format(
-            metrics=trainer.evaluate(eval_dataset=test,
-                                     ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                     metric_key_prefix="test")
-        )
-        test.include_premise = False
-        logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}", test)
-        test_metrics.update(trainer.metrics_format(
-            metrics=trainer.evaluate(eval_dataset=test,
-                                     ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                     metric_key_prefix="test_wo_premise")
-        ))
-        test.include_premise = True
-        test.include_conclusion = False
-        logger.debug("Another clever-hans-check. Let's continue with the fool-test: {}", test)
-        test_metrics.update(trainer.metrics_format(
-            metrics=trainer.evaluate(eval_dataset=test,
-                                     ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                     metric_key_prefix="test_wo_conclusion")
-        ))
-        test.include_premise = True
-        test.include_conclusion = True
-
         try:
-            logger.success("Test 3 times on {} test samples: {}", len(test),
-                           ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
-        except TypeError:
-            logger.opt(exception=False).warning("Strange test-metrics-outputs-dict. Should be str->float, "
-                                                "but we have following: {}",
-                                                pformat(test_metrics, indent=2, compact=False))
-        trainer.save_metrics(split="test", metrics=test_metrics)
+            test_metrics: Dict = trainer.metrics_format(
+                metrics=trainer.evaluate(eval_dataset=test,
+                                         ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                         metric_key_prefix="test")
+            )
+            test.include_premise = False
+            logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}", test)
+            test_metrics.update(trainer.metrics_format(
+                metrics=trainer.evaluate(eval_dataset=test,
+                                         ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                         metric_key_prefix="test_wo_premise")
+            ))
+            test.include_premise = True
+            test.include_conclusion = False
+            logger.debug("Another clever-hans-check. Let's continue with the fool-test: {}", test)
+            test_metrics.update(trainer.metrics_format(
+                metrics=trainer.evaluate(eval_dataset=test,
+                                         ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                         metric_key_prefix="test_wo_conclusion")
+            ))
+            test.include_premise = True
+            test.include_conclusion = True
+
+            try:
+                logger.success("Test 3 times on {} test samples: {}", len(test),
+                               ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
+            except TypeError:
+                logger.opt(exception=False).warning("Strange test-metrics-outputs-dict. Should be str->float, "
+                                                    "but we have following: {}",
+                                                    pformat(test_metrics, indent=2, compact=False))
+            trainer.save_metrics(split="test", metrics=test_metrics)
+        except RuntimeError:
+            logger.opt(exception=True).error("Something went wrong with the model - "
+                                             "please try the model stand-alone (in {})",
+                                             output_dir.absolute())
+        except IndexError:
+            logger.opt(exception=True).error("Corrupted test data? {}", test)
 
     if args.save != "n/a" and args.save != "no-model":
         logger.debug("You want to save the model")
