@@ -19,7 +19,7 @@ from loguru import logger
 import transformers
 import argparse
 
-VERSION: str = "V0.3.0"
+VERSION: str = "V0.3.1"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -118,8 +118,8 @@ if __name__ == "__main__":
         if args.use_ExplaGraphs != "n/a":
             if args.use_ExplaGraphs is None:
                 logger.debug("You want to use the entire ExplaGraphs as a part of the training set - fine")
-                train += load_arct(split="train", tokenizer=tokenizer)
-                train += load_arct(split="dev", tokenizer=tokenizer)
+                train += load_explagraphs(split="train", tokenizer=tokenizer)
+                train += load_explagraphs(split="dev", tokenizer=tokenizer)
             else:
                 logger.debug("You want to use the ExplaGraphs as a part of the training set with "
                              "following specifications: {}", args.use_ExplaGraphs)

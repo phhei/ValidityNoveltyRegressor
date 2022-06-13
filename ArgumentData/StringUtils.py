@@ -63,6 +63,9 @@ def paraphrase(text: str, temperature: Optional[float] = None,
                  length_input+max(0, overflow), paraphrase_model[0].model_max_length)
     if overflow > 0:
         logger.info("Your input was truncated ({} tokens: \"{}\")", overflow, overflow_str)
+    if torch.cuda.is_available():
+        logger.trace("The input-tensor ({}) must be first shifted to the GPU!", input_encoded)
+        input_encoded = input_encoded.to(paraphrase_model[1].device)
 
     paraphrases_original = paraphrase_model[0].batch_decode(
         paraphrase_model[1].generate(**input_encoded,
@@ -166,6 +169,9 @@ def summarize(text: str, text_pair: Optional[str] = None, summarization_model_na
                  length_input + max(0, overflow), summarization_model[0].model_max_length)
     if overflow > 0:
         logger.info("Your input was truncated ({} tokens: \"{}\")", overflow, overflow_str)
+    if torch.cuda.is_available():
+        logger.trace("The input-tensor ({}) must be first shifted to the GPU!", input_encoded)
+        input_encoded = input_encoded.to(summarization_model[1].device)
 
     summarization = summarization_model[0].batch_decode(
         summarization_model[1].generate(**input_encoded,
