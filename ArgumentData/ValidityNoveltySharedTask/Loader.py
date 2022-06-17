@@ -91,7 +91,7 @@ def load_dataset(split: Literal["train", "dev", "test", "test_without_dev_topics
             data.append(Sample(
                 premise="{}{}".format("{}: ".format(row["topic"]) if include_topic else "", row["Premise"]),
                 conclusion=row["Conclusion"],
-                validity=base_validity if base_novelty is None or not continuous_val_nov else
+                validity=base_validity if base_validity is None or not continuous_val_nov else
                 (base_validity+1/3)/(5/3) +
                 ((ref_comparable_concl1["Votes_Concl1IsMoreValid"].sum() +
                   ref_comparable_concl2["Votes_Concl2IsMoreValid"].sum()) /
@@ -125,7 +125,10 @@ def load_dataset(split: Literal["train", "dev", "test", "test_without_dev_topics
         samples=data,
         tokenizer=tokenizer,
         max_length=132 + 8 * int(include_topic) if max_length_sample is None else max_length_sample,
-        name="annotated_{}".format(split)
+        name="annotated_{}{}{}{}".format(
+            split, "_" if continuous_val_nov or continuous_sample_weight else "",
+            "C" if continuous_val_nov else "", "CW" if continuous_sample_weight else ""
+        )
     )
 
     logger.success("Successfully retrieved {} samples: {}", len(dataset), dataset.get_sample_class_distribution())

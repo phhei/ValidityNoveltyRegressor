@@ -85,7 +85,10 @@ def load_dataset(tokenizer: PreTrainedTokenizer, split: Literal["all", "train", 
         samples=samples,
         tokenizer=tokenizer,
         max_length=max_length_sample or 96,
-        name="IBM-Arg-Quality"
+        name="IBM-Arg-Quality{}{}{}".format(
+            "_" if continuous_val_nov or continuous_sample_weight else "",
+            "C" if continuous_val_nov else "", "CW" if continuous_sample_weight else ""
+        )
     )
 
     logger.success("Successfully created the dataset {}, but {} samples are redundant -> removed",

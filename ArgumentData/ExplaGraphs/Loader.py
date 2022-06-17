@@ -19,7 +19,7 @@ train_path = "ArgumentData/ExplaGraphs/train.tsv"
 def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
                  max_length_sample: Optional[int] = None, max_number: int = -1,
                  generate_non_novel_non_valid_samples_by_random: bool = False,
-                 continuous_val_nov: Union[bool, float] = True,
+                 continuous_val_nov: Union[bool, float] = False,
                  continuous_sample_weight: bool = False) -> ValidityNoveltyDataset:
     data = pandas.read_csv(filepath_or_buffer=train_path if split == "train" else dev_path,
                            sep="\t", quotechar=None, quoting=3, header=None,
@@ -165,7 +165,12 @@ def load_dataset(split: Literal["train", "dev"], tokenizer: PreTrainedTokenizer,
         samples=samples,
         tokenizer=tokenizer,
         max_length=96 if max_length_sample is None else max_length_sample,
-        name="ExplaGraphs_{}".format(split)
+        name="ExplaGraphs_{}{}{}{}".format(
+            split,
+            "_" if (isinstance(continuous_val_nov, float) or continuous_val_nov) or continuous_sample_weight else "",
+            "C" if isinstance(continuous_val_nov, float) or continuous_val_nov else "",
+            "CW" if continuous_sample_weight else ""
+        )
     )
 
     logger.success("Successfully created the dataset: {}", r_data)

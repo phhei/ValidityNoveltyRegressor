@@ -171,7 +171,12 @@ def load_dataset(split: Literal["train", "dev", "test"], tokenizer: PreTrainedTo
         tokenizer=tokenizer,
         max_length=100 + 8 * int(include_topic) + 16 * int(include_debate_info)
         if max_length_sample is None else max_length_sample,
-        name="ARCT{}_{}".format("+adversarial" if include_adversarial_data else "", split)
+        name="ARCT{}_{}{}{}{}".format(
+            "+adversarial" if include_adversarial_data else "",
+            split,
+            "_" if continuous_val_nov or continuous_sample_weight else "",
+            "C" if continuous_val_nov else "", "CW" if continuous_sample_weight else ""
+        )
     )
 
     logger.success("Successfully created the dataset: {}", data)

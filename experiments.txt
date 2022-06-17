@@ -1,5 +1,5 @@
 1. Validity-Novelty-Classification ist ohne prior background knowledge kaum machbar (sehr hartes Test-Set)
-2. Man kann synthetisch Trainingsdaten erstellen, die helfen
+2. All for one: Man kann synthetisch Trainingsdaten erstellen, die helfen
    1. Je vielfältiger die synthetischen Quellen, desto besser
    2. Je mehr die synthetischen Daten, desto besser
 3. Zusätzliche Techniken helfen das Ergebnis weiter zu pushen
@@ -8,13 +8,16 @@
    3. (smooth Val/nov in Trainingdata (on/out))
    4. (Aus dem active learning: warm-start)
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Original stand-alone (local): 35.5pc - sagt (fast) immer valid + not novel vorher %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Was wir schon mal festsetzen können:
--t roberta-large -bs 64 -lr 3e-5 -v --equalize_source_distribution --save --analyse train dev test --use_annotation_ValTest \#--include_topic\#--min_confidence\#majority\#--continuous_sample_weight  -s \#-\n#XXX\#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1\#--automatic_samples
+-t roberta-large -bs 8 -lr 3e-5 -v --equalize_source_distribution --save --analyse train dev test --use_annotation_ValTest \#--include_topic\#--min_confidence\#majority\#--continuous_sample_weight  -s \#-\n#XXX\#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1\#--automatic_samples
 
 -------------------------------------------------------------------------------------
 
-2: Man kann synthetisch Trainingsdaten erstellen, die helfen
+2: All for one: Man kann synthetisch Trainingsdaten erstellen, die helfen
 - ExplaGraphs: --use_ExplaGraphs
 - IBM: --use_IBM
 - Essays: --use_essays \#--include_samples_without_detail_annotation_info
@@ -25,19 +28,37 @@ Was wir schon mal festsetzen können:
 Accuracy in \% (p=fooled by leaving out the premise (<-3\%), c=fooled out by leaving out the conclusion(<-3\%), +=better in validity(+5\%), ~=better in novelty(+5\%)):
 
 V0.2.0->0.3.1                               100             1.000               10.000              100.000
-ExplaGraphs                              119811->18.2pc    119819->39.5         119827
-ExplaGraphs+IBM                          119812->35.5pc    119820->36.5         119828
-ExplaGraphs+Essays                       119813->35.5pc    119821->RIP          119830
-ExplaGraphs+IBM+Essays                   119814->21.2pc~   119822               119829
+ExplaGraphs                              119811->18.2pc    119819->39.5         119827->34.6         119893->119907->35.5pc
+ExplaGraphs+IBM                          119812->35.5pc    119820->36.5         119828->37.4c        119894->38.2
+ExplaGraphs+Essays                       119813->35.5pc    120333->39.3         119830->36.7         119895->119956->35.5pc
+ExplaGraphs+IBM+Essays                   119814->21.2pc~   119822->38.6~        119829->35.5pc       119896->119957->34.8
 ARCT+ARCTUKW                             119252->29.1c+    119262->17.7pc       119273->44.7         119294->38.1c+
 ARCT+ARCTUKW+IBM                         119253->31.9c     119263->24.2pc+      119274->42.4         119295->119806->34.7pc
 ARCT+ARCTUKW+Essays                      119254->17.8pc    119264->37.0         119275->45.0         119396->38.5+
 ARCT+ARCTUKW+IBM+Essays                  119255->28.3c~    119265->40.0~        119276->46.3         119297->38.8+
-ExplaGraphs+ARCT+ARCTUKW                 119815->20.8Pc    119823->18.9PC       119830
-ExplaGraphs+ARCT+ARCTUKW+IBM+Essays      119816->18.0pC    119824               119832
+ExplaGraphs+ARCT+ARCTUKW                 119815->20.8Pc    119823->18.9PC       119831->45.4         119891->119908->35.5pc
+ExplaGraphs+ARCT+ARCTUKW+IBM+Essays      119816->18.0pC    119824->35.5         119832->40.5         119892->119909->36.7
 Original                                 local ->35.5pc    119665->34.2c        119666->46.3+        119698->119799->43.5
-Original+ExplaGraphs                     119818->34.8pC    119825               119833
+Original+ExplaGraphs                     119818->34.8pC    119825->41.0+        119833->41.0+        119890->119906->35.5pc
 Original+ARCT+ARCTUKW                    119686->19.7pc~   119676->35.5pc       119670->45.4+        119697->119798->35.5pc
 Original+ARCT+ARCTUKW+IBM+Essays         119685->21.2pc~   119677->35.5pc       119669->45.4+        119701->45.4+
-all                                      119817->16.8PC    119826               119834               119835
+all                                      119817->16.8PC    119826->35.7c        119834->44.6+        119835->119905->35.5pc
+
+Best:
+- Original -> 10.000
+- Original+ARCT+ARCTUKW+IBM+Essays -> 10.000
+- ARCT+ARCTUKW+IBM+Essays -> 10.000
 -------------------------------------------------------------------------------------
+
+3. Zusätzliche Techniken helfen das Ergebnis weiter zu pushen:
+
+- IBM: --use_IBM \#--continuous_sample_weight\#--continuous_val_nov
+- Essays: --use_essays \#--include_samples_without_detail_annotation_info\#--continuous_sample_weight\#--continuous_val_nov
+- ARCT: --use_ARCT \#--continuous_sample_weight\#--continuous_val_nov
+- ARCTUKW: --use_ARCTUKW \#--continuous_sample_weight\#--continuous_val_nov
+- Original: --use_annotation_train \#--include_topic\#--continuous_sample_weight\#--continuous_val_nov
+
+                                                adaptive Weights        smooth Val/nov          adaptive Weights+smooth Val/Nov
+Original -> 10.000                              120467                  120468                  120466
+Original+ARCT+ARCTUKW+IBM+Essays -> 10.000      120463                  120464                  120465
+ARCT+ARCTUKW+IBM+Essays -> 10.000               120462                  120461                  120460

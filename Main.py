@@ -523,7 +523,8 @@ if __name__ == "__main__":
                                          metric_key_prefix="test")
             )
             test.include_premise = False
-            logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}", test)
+            logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}",
+                         test)
             test_metrics.update(trainer.metrics_format(
                 metrics=trainer.evaluate(eval_dataset=test,
                                          ignore_keys=["logits", "loss", "hidden_states", "attentions"],
