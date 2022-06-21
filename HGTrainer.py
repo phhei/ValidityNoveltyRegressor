@@ -65,7 +65,8 @@ def val_nov_metric(eval_data: EvalPrediction) -> Dict[str, float]:
             "accuracy": -1,
             "f1_validity": -1,
             "f1_novelty": -1,
-            "f1_macro": -1
+            "f1_macro": -1,
+            "never_predicted_classes": 4
         }
 
 
@@ -117,7 +118,11 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
                           axis=0)
             ]), axis=0),
             1, 0
-        )) / numpy.size(is_validity)
+        )) / numpy.size(is_validity),
+        "never_predicted_classes": sum(
+            [int(numpy.all(numpy.abs(is_validity-validity) < .5) and numpy.all(numpy.abs(is_novelty-novelty) < .5))
+             for validity, novelty in [(1, 1), (1, 0), (0, 1), (0, 0)]]
+        )
     }
 
     ret_base_help = {
@@ -215,7 +220,8 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
 
     logger.info("Clean the metric-dict before returning: {}",
                 " / ".join(map(lambda key: "{}: {}".format(key, ret.pop(key)),
-                               ["f1_valid_novel", "f1_valid_nonnovel", "f1_nonvalid_novel", "f1_nonvalid_nonnovel"])))
+                               ["approximately_hits_validity", "approximately_hits_novelty", "exact_hits_validity",
+                                "exact_hits_novelty", "size"])))
 
     return ret
 

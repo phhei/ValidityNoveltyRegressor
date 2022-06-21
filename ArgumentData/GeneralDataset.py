@@ -98,7 +98,7 @@ class ValidityNoveltyDataset(Dataset):
         logger.info("You want to extend the dataset \"{}\" with \"{}\" ({}+{} = {} instances)",
                     self.name, other.name, len(self), len(other), len(self) + len(other))
 
-        self.name += " + {}".format(other.name)
+        self.name += " + {}".format(other.name.strip())
         if self.tokenizer != other.tokenizer:
             logger.warning("The tokenizer of the added dataset is different -- ignore \"{}\"!", other.tokenizer)
         if self.max_length != other.max_length:
@@ -121,6 +121,30 @@ class ValidityNoveltyDataset(Dataset):
             "" if self.include_premise else " -- without premises!",
             "" if self.include_conclusion else " -- without conclusions!"
         )
+
+    def dataset_path(self, base_path: Optional[Path], num_samples: Optional[int] = None) -> Path:
+        if base_path is None:
+            base_path = Path()
+            logger.info("Set the ground path to \"{}\"", base_path.absolute())
+
+        base_path = base_path.joinpath(self.name.replace("(", "_").replace(")", "_").replace("*", ""),
+                                       "{} samples".format(len(self.samples_extraction)
+                                                           if num_samples is None else num_samples))
+        if not self.include_premise:
+            base_path =  base_path.joinpath("wo premise")
+        if not self.include_conclusion:
+            base_path = base_path.joinpath("wo conclusion")
+        logger.debug("Home directory of the dataset: \"{}\"", base_path)
+        if not base_path.exists():
+            logger.debug("This directory doesn't exist - create")
+            base_path.mkdir(parents=True, exist_ok=False)
+            sub_counter = 0
+        else:
+            sub_counter = len(list(base_path.glob(pattern="try*")))
+            logger.trace("Found {} tries", sub_counter)
+
+        return base_path.joinpath("try-{}".format(sub_counter))
+
 
     def reset_to_original_data(self):
         """
@@ -743,10 +767,11 @@ class ValidityNoveltyDataset(Dataset):
             for s in samples_to_delete:
                 logger.trace("Removing unnecessary sample: {}", s)
                 self.samples_extraction.remove(s)
+            samples_in_not_chosen_set_in_extraction = len(samples_in_not_chosen_set)-len(samples_to_delete)
         else:
-            samples_to_delete = []
+            samples_in_not_chosen_set_in_extraction = len(samples_in_not_chosen_set)
 
-        number_samples_class = (number - (len(samples_in_not_chosen_set)-len(samples_to_delete)))/len(chosen_class_set)
+        number_samples_class = (number - samples_in_not_chosen_set_in_extraction)/len(chosen_class_set)
 
         equal_class_distribution_dataset(minimum_number=math.floor(number_samples_class),
                                          maximum_number=math.ceil(number_samples_class))
@@ -826,7 +851,7 @@ class ValidityNoveltyDataset(Dataset):
         logger.debug("Let's load from \"{}\"", path.name)
 
         if not path.exists():
-            raise FileNotFoundError("Please chose a already existing directory")
+            raise FileNotFoundError("Please chose a already existing directory ({})".format(path.absolute()))
         if not path.is_dir():
             raise AttributeError(
                 "{} has to be a directory, containing a \"_dev\", \"_test\" and \"_train\"-folder".format(
