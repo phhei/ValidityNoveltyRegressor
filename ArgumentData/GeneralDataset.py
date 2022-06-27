@@ -145,7 +145,6 @@ class ValidityNoveltyDataset(Dataset):
 
         return base_path.joinpath("try-{}".format(sub_counter))
 
-
     def reset_to_original_data(self):
         """
         A dataset contains a set of original data (unaffected by sampling, the pure data at initialization time) and an

@@ -127,14 +127,14 @@ if __name__ == "__main__":
         if args.use_ExplaGraphs != "n/a":
             if args.use_ExplaGraphs is None:
                 logger.debug("You want to use the entire ExplaGraphs as a part of the training set - fine")
-                train += load_explagraphs(split="train", tokenizer=tokenizer)
-                train += load_explagraphs(split="dev", tokenizer=tokenizer)
+                for split in ["train", "dev"]:
+                    train += load_explagraphs(split=split, tokenizer=tokenizer)
             else:
                 logger.debug("You want to use the ExplaGraphs as a part of the training set with "
                              "following specifications: {}", args.use_ExplaGraphs)
                 arg_explagraphs = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
                 arg_explagraphs.add_argument("-s", "--split", action="store", default="train", type=str,
-                                             choices=["train", "dev"], required=False)
+                                             choices=["train", "dev", "all"], required=False)
                 arg_explagraphs.add_argument("-l", "--max_length_sample", action="store", default=96, type=int,
                                              required=False)
                 arg_explagraphs.add_argument("-n", "--max_number", action="store", default=-1, type=int,
@@ -148,15 +148,16 @@ if __name__ == "__main__":
                     args.use_ExplaGraphs[1:].split("#") if args.use_ExplaGraphs.startswith("#")
                     else args.use_ExplaGraphs.split("#")
                 )
-                train += load_explagraphs(
-                    split=parsed_args_explagraphs.split, tokenizer=tokenizer,
-                    max_length_sample=parsed_args_explagraphs.max_length_sample,
-                    max_number=parsed_args_explagraphs.max_number,
-                    generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
-                    continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
-                    parsed_args_explagraphs.continuous_val_nov,
-                    continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
-                )
+                for split in (["train", "dev"] if parsed_args_explagraphs.split == "all" else [parsed_args_explagraphs.split]):
+                    train += load_explagraphs(
+                        split=split, tokenizer=tokenizer,
+                        max_length_sample=parsed_args_explagraphs.max_length_sample,
+                        max_number=parsed_args_explagraphs.max_number,
+                        generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
+                        continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
+                        parsed_args_explagraphs.continuous_val_nov,
+                        continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
+                    )
 
         if args.use_ARCT != "n/a":
             if args.use_ARCT is None:

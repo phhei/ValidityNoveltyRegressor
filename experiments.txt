@@ -10,7 +10,7 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Original stand-alone (local): 13.1pc - sagt (fast) immer valid + not novel vorher %%%
-%%% V0.4.0: 120766: 22.6-23.5-24.9+ (validity-f1: 74.3/ novelty.f1: 17.8)             %%%
+%%% V0.4.0: 120766: 22.6-23.5-24.9+ (validity-f1: 74.3/ novelty-f1: 17.8)             %%% (random2test.baseline: 18.0-24.5-31.8)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Was wir schon mal festsetzen können:
@@ -46,21 +46,22 @@ Original+ARCT+ARCTUKW+IBM+Essays         120731->13.1pc        120740->13.1pc   
 all                                      119817->10.1PC        119826->13.6c        119834->29.7+        119835->119905->13.1pc
 
 V0.4.0                                      100                 1.000               10.000              100.000
-ExplaGraphs                              120829
-ExplaGraphs+IBM
-ExplaGraphs+Essays
-ExplaGraphs+IBM+Essays
-ARCT+ARCTUKW                             120830
-ARCT+ARCTUKW+IBM                         120831
-ARCT+ARCTUKW+Essays                      120832
-ARCT+ARCTUKW+IBM+Essays                  120772                120773               120836
-ExplaGraphs+ARCT+ARCTUKW                 120833                120834               120835
-ExplaGraphs+ARCT+ARCTUKW+IBM+Essays      120771                120774               120826
-Original                                 7.7-16.9-26.1c(p)     13.0-19.4-32.6cp     120828                120827
-Original+ExplaGraphs                     8.7-16.0-22.0Cp       15.3-19.0-22.1c(p)   120825
-Original+ARCT+ARCTUKW                   13.1-15.6-20.4cp       18.0-22.9-30.2(c)    120824*
-Original+ARCT+ARCTUKW+IBM+Essays        13.1-17.8-27.0cp       18.1-21.3-27.3~(c)(p)120808
-all                                     13.1-15.6-18.1+cp      16.4-20.0-25.0(c)(p) 120809
+ExplaGraphs                              8.3-15.7-26.0~C(p)    07.7-24.4-36.6(c)(p) 10.0-12.2-19.8+Cp                                                 war super in nonvalid-NOVEL... die Eigenschaft ist bei zu viel Samples (>=10.000) kaputt gegangen
+ExplaGraphs+IBM                         10.3-17.0-22.9Cp       07.7-23.3-36.4(c)(p) 10.0-19.0-32.5+c(p)
+ExplaGraphs+Essays                      14.6-18.3-22.7cp       17.3-24.1-31.2(c)    10.0-25.5-37.3(c)(p)  13.1-16.6-23.5c(p)
+ExplaGraphs+IBM+Essays                  13.1-19.2-27.7Cp       12.0-21.6-35.6(c)(p) 10.0-16.0-30.0+c(p)
+ARCT+ARCTUKW                            10.4-16.6-20.9Cp       15.1-21.2-29.8~(c)(p)19.4-23.6-26.0(c)     13.1-20.8-27.4(c)
+ARCT+ARCTUKW+IBM                        13.1-16.1-22.4cp       12.6-16.9-22.9~cp    10.3-14.4-19.1cp
+ARCT+ARCTUKW+Essays                     10.0-16.5-24.5+c(p)    16.2-20.3-27.1~(c)(p)10.1-18.2-25.6(c)(p)
+ARCT+ARCTUKW+IBM+Essays                 13.1-16.8-22.1cp       16.5-19.9-24.9(c)(p) 07.7-15.5-21.5~c(p)   13.1-18.9-30.4(c)
+ExplaGraphs+ARCT+ARCTUKW                11.0-16.5-20.0+c(p)    14.8-21.5-29.4~(c)   23.0-26.4-29.2        13.1-21.8-27.9(c)(p)//derivation0.063
+ExplaGraphs+ARCT+ARCTUKW+IBM+Essays     13.1-17.8-27.0cp       18.1-21.3-27.3~(c)(p)07.7-13.7-16.8cp
+Original                                 7.7-16.9-26.1c(p)     13.0-19.4-32.6cp     13.1-25.9-34.4(c)(p)  18.7-27.5-32.6(c)//derivation0.063
+Original+ExplaGraphs                     8.7-16.0-22.0Cp       15.3-19.0-22.1c(p)   13.1-15.3-19.1c(p)
+Original+ARCT+ARCTUKW                   13.1-15.6-20.4cp       18.0-22.9-30.2(c)    18.6-24.6-28.7(c)     13.1-17.7-26.8c//derivation:0.065
+Original+ExplaGraphs+ARCT+ARCTUKW       13.1-16.2-19.4c(p)     13.1-22.1-30.2(c)(p) 07.7-16.4-26.4(c)(p)
+Original+ARCT+ARCTUKW+IBM+Essays        13.1-15.8-21.6+cp      15.3-22.3-30.0(c)(p) 09.6-18.5-26.0+(c)(p) 13.1-13.1-13.1cp
+all                                     13.1-15.6-18.1+cp      16.4-20.0-25.0(c)(p) 10.0-17.0-22.8(c)(p)
 
 Best:
 - Original -> 10.000
@@ -70,6 +71,7 @@ Best:
 
 3. Zusätzliche Techniken helfen das Ergebnis weiter zu pushen:
 
+- ExplaGraphs: --use_ExplaGraphs \#-s\#all\#--continuous_sample_weight\#--continuous_val_nov\#.2
 - IBM: --use_IBM \#--continuous_sample_weight\#--continuous_val_nov
 - Essays: --use_essays \#--include_samples_without_detail_annotation_info\#--continuous_sample_weight\#--continuous_val_nov
 - ARCT: --use_ARCT \#-s\#all\#--continuous_sample_weight\#--continuous_val_nov
@@ -79,6 +81,7 @@ Best:
 F1 in \% (p=fooled by leaving out the premise (<-3\%), c=fooled out by leaving out the conclusion(<-3\%), +=better in validity(+5\%), ~=better in novelty(+5\%)):
 
                                                 adaptive Weights        smooth Val/nov          adaptive Weights+smooth Val/Nov
-Original -> 10.000                              120467->31.7+           120468->40.0            120466->35.7
-Original+ARCT+ARCTUKW+IBM+Essays -> 10.000
-ARCT+ARCTUKW+IBM+Essays -> 10.000
+Original (w/o sampling)                         121028                  13.1-20.0-27.3+(c)(p)   13.1-18.6-22.5+(c)P
+Original -> 10.000                              13.1-24.3-37.7(c)(p)    13.1-25.0-31.3(c)(p)    13.1-17.9-27.9(c)(p)
+Original+ARCT+ARCTUKW -> 10.000                 13.1-20.3-24.5(c)       23.2-26.2-29.4          14.1-23.2-33.4(c)(p)                      //teils lange Epochen, bis zu 4.75-1
+ExplaGraphs+ARCT+ARCTUKW -> 10.000              07.7-18.5-27.6(c)(p)    07.7-22.8-28.7(c)(p)    09.7-21.1-28.7(c)(p)
