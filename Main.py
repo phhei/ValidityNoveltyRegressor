@@ -23,7 +23,7 @@ from ArgumentData.StudentEssays.Loader import load_dataset as load_essays
 from ArgumentData.ValidityNoveltySharedTask.Loader import load_dataset as load_annotation
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 
-VERSION: str = "V0.4.0"
+VERSION: str = "V0.4.1"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -141,7 +141,8 @@ if __name__ == "__main__":
                                              required=False)
                 arg_explagraphs.add_argument("--generate_non_novel_non_valid_samples_by_random", action="store_true",
                                              default=False, required=False)
-                arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float, required=False)
+                arg_explagraphs.add_argument("--continuous_val_nov", action="store", default=-1, type=float,
+                                             required=False)
                 arg_explagraphs.add_argument("--continuous_sample_weight", action="store_true", default=False,
                                              required=False)
                 parsed_args_explagraphs = arg_explagraphs.parse_args(
@@ -153,7 +154,8 @@ if __name__ == "__main__":
                         split=split, tokenizer=tokenizer,
                         max_length_sample=parsed_args_explagraphs.max_length_sample,
                         max_number=parsed_args_explagraphs.max_number,
-                        generate_non_novel_non_valid_samples_by_random=parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
+                        generate_non_novel_non_valid_samples_by_random=
+                        parsed_args_explagraphs.generate_non_novel_non_valid_samples_by_random,
                         continuous_val_nov=False if parsed_args_explagraphs.continuous_val_nov < 0 else
                         parsed_args_explagraphs.continuous_val_nov,
                         continuous_sample_weight=parsed_args_explagraphs.continuous_sample_weight
