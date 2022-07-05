@@ -2,7 +2,7 @@
 ###tested with Python 3.9.9###
 ##############################
 
-# logging and basic libraries
+### logging and basic libraries ###
 loguru>=0.5.0
 numpy~=1.22.3
 pandas>=1.4.0
@@ -11,19 +11,20 @@ nltk>=3.2
 spacy==3.3.0
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.3.0/en_core_web_sm-3.3.0.tar.gz#egg=en_core_web_sm
 pattern
+# if the installation failed, see https://github.com/clips/pattern for resolving that issue
 
-# for neural AI stuff
+### for neural AI stuff ###
 torch==1.11.*
 transformers==4.17.0
 sentencepiece
 
-# for evaluation/ paraphrasing
+### for evaluation/ paraphrasing ###
 bert-score==0.3.11
 sentence-transformers
 
-# for visualization/ output (not completely necessary)
+### for visualization/ output (not completely necessary) ###
 seaborn>=0.11
 matplotlib==3.*
 
-# for logging (not mandatory)
+### for logging (not mandatory) ###
 Deprecated

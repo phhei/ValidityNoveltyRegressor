@@ -87,3 +87,4 @@ Original -> 10.000                              13.1-24.3-37.7(c)(p)    13.1-25.
 Original+ARCT+ARCTUKW -> 10.000                 13.1-20.3-24.5(c)       23.2-26.2-29.4          14.1-23.2-33.4(c)(p)                      //teils lange Epochen, bis zu 4.75-1
 ExplaGraphs+ARCT+ARCTUKW -> 10.000              07.7-18.5-27.6(c)(p)    07.7-22.8-28.7(c)(p)    09.7-21.1-28.7(c)(p)
 ExplaGraphs+(IBM+Essays) -> 1.000               09.8-24.4-33.0(c)(p)    17.6-27.0-38.7(c)(p)    15.5-25.5-32.3(c)
+Original+ExplaGraphs+IBM+Essays -> 10.000       13.1-15.0-24.5cp        07.7-12.4-20.2+cp       13.1-14.9-20.8+cp                         // oftmals eine Klasse niemals predicted - stuck in local optimas, fails in novelty completly

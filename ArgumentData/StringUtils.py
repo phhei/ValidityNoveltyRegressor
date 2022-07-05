@@ -286,6 +286,7 @@ def wordnet_changes_text(text: str, direction: Literal["more_concrete", "more_ge
         logger.opt(exception=True).warning("NLTK not complete - retry!")
         nltk.download("punkt")
         nltk.download("averaged_perceptron_tagger")
+        nltk.download("universal_tagset")
         nltk.download("omw-1.4")
         return wordnet_changes_text(text=text, direction=direction, change_threshold=change_threshold,
                                     maximum_synsets_to_fix=maximum_synsets_to_fix)
