@@ -31,6 +31,7 @@ class ValidityNoveltyDataset(Dataset):
         logger.debug("Tokenizer: {} ({})", tokenizer.name_or_path, max_length)
 
         self.name = name
+        self.sample_weight: Optional[float] = None
 
         self.samples_original: List[Sample] = \
             samples if isinstance(samples, List) else list(samples)
@@ -66,12 +67,12 @@ class ValidityNoveltyDataset(Dataset):
                 {
                     "validity": torch.FloatTensor([torch.nan if sample.validity is None else sample.validity]),
                     "novelty": torch.FloatTensor([torch.nan if sample.novelty is None else sample.novelty]),
-                    "weight": torch.FloatTensor([sample.weight])
+                    "weight": torch.FloatTensor([sample.weight if self.sample_weight is None else self.sample_weight])
                 }
             )
         except ValueError:
             logger.opt(exception=False).error("Corrupted sample at position {}: {} - "
-                                             "please remove it next time!", index, sample)
+                                              "please remove it next time!", index, sample)
             ret = self.tokenizer(
                 text="Bugs are not nice.", text_pair="We should avoid errors in coding.",
                 padding="max_length", truncation="longest_first", max_length=self.max_length,
@@ -122,7 +123,35 @@ class ValidityNoveltyDataset(Dataset):
             "" if self.include_conclusion else " -- without conclusions!"
         )
 
+    def fix_sample_weights(self, fixed_value: float) -> None:
+        """
+        Fixes the sample weights for each sample to a given valuen in the dataset (regardless what the actual
+        sample weight is)
+
+        :param fixed_value: the fixed values
+        :return: nothing
+        """
+        if self.sample_weight is None:
+            logger.warning("You change this dataset from flexible (dataset/ instance-specific) sample weight to a"
+                           "fixed sample weight of {}", fixed_value)
+        if fixed_value < 0:
+            logger.warning("You set your sample weight to a negative value! This will result in avoiding the "
+                           "ground truth-models!")
+
+        self.name += " (w{})".format(fixed_value)
+        self.sample_weight = fixed_value
+
+        logger.debug("Successfully updated \"{}\"", self)
+
     def dataset_path(self, base_path: Optional[Path], num_samples: Optional[int] = None) -> Path:
+        """
+        Generates a proper dataset path (for storing stats, fine-tuned models ect.)
+
+        :param base_path: a base path
+        :param num_samples: how many samples are you expect to hvae in the dataset? If no number si given, the number
+        is the actual number of sample (in the extracted split)
+        :return: a good path
+        """
         if base_path is None:
             base_path = Path()
             logger.info("Set the ground path to \"{}\"", base_path.absolute())

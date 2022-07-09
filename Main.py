@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from pprint import pformat
 from shutil import move
-from typing import Dict
+from typing import Dict, List, Union
 
 import numpy
 import transformers
@@ -23,7 +23,7 @@ from ArgumentData.StudentEssays.Loader import load_dataset as load_essays
 from ArgumentData.ValidityNoveltySharedTask.Loader import load_dataset as load_annotation
 from HGTrainer import ValNovTrainer, RobertaForValNovRegression, val_nov_metric
 
-VERSION: str = "V0.4.1"
+VERSION: str = "V0.4.2"
 
 if __name__ == "__main__":
     argv = argparse.ArgumentParser(
@@ -45,8 +45,10 @@ if __name__ == "__main__":
                       help="Verbose mode - more logging output from hugging-face")
     argv.add_argument("--save_memory_training", action="store_true", default=False, required=False,
                       help="gradient_checkpointing")
-    argv.add_argument("--use_preloaded_dataset", action="store", type=Path, default=None, required=False,
-                      help="If you want to use a preloaded dataset, give here the root path")
+    argv.add_argument("--use_preloaded_dataset", action="store", nargs="+", type=Path, default=[],
+                      required=False,
+                      help="If you want to use a preloaded dataset, give here the root path. "
+                           "You can have also multiple runs with several datasets (list).")
     argv.add_argument("--use_ExplaGraphs", action="store", nargs="?", default="n/a", type=str, required=False,
                       help="using the ExplaGraphs for training. You can provide additional arguments for this dataset "
                            "by replacing all the whitespaces with '#', starting with '#'")
@@ -78,6 +80,10 @@ if __name__ == "__main__":
     argv.add_argument("--intelligent_truncation", action="store_true", default=False, required=False,
                       help="Do a representative clustering + weighting before truncating data if a restricted "
                            "number to use from a chosen source is given - hence, cherry-picks the samples")
+    argv.add_argument("--ignore_weights", action="store", nargs="?", type=float, default=False, const=1, required=False,
+                      help="If you set this option, you disable the different sample weights, "
+                           "hence each sample contributes with the same (potential) strengths to the training weights."
+                           "You can further define the value of this fixed weight (optional).")
     argv.add_argument("--equalize_source_distribution", action="append", nargs="?", type=str, default=[],
                       const="train", required=False,
                       help="Forces the train-split (or other splits if defined) to have an equalized sample "
@@ -111,7 +117,27 @@ if __name__ == "__main__":
 
     args = argv.parse_args()
 
-    if args.use_preloaded_dataset is None:
+    train: Union[ValidityNoveltyDataset, List[ValidityNoveltyDataset]]
+    dev: Union[ValidityNoveltyDataset, List[ValidityNoveltyDataset]]
+    test: Union[ValidityNoveltyDataset, List[ValidityNoveltyDataset]]
+
+    if len(args.use_preloaded_dataset) >= 1:
+        logger.warning("OK, let's load the {} datasets from {} (all --use-parameters are ignored)",
+                       len(args.use_preloaded_dataset), args.use_preloaded_dataset)
+        train = []
+        dev = []
+        test = []
+        for pld in args.use_preloaded_dataset:
+            datasets = ValidityNoveltyDataset.load(path=pld)
+            train.append(datasets["train"])
+            dev.append(datasets["dev"])
+            test.append(datasets["test"])
+
+        if len(args.use_preloaded_dataset) != args.repetitions:
+            logger.warning("You want to have {0} repetitions, but give us {1} datasets - "
+                           "so you will have {1} repetitions",
+                           args.repetitions, len(args.use_preloaded_dataset))
+    else:
         tokenizer = transformers.RobertaTokenizer.from_pretrained(args.transformer)
 
         train = ValidityNoveltyDataset(samples=[], tokenizer=tokenizer, max_length=156, name="Train")
@@ -149,7 +175,9 @@ if __name__ == "__main__":
                     args.use_ExplaGraphs[1:].split("#") if args.use_ExplaGraphs.startswith("#")
                     else args.use_ExplaGraphs.split("#")
                 )
-                for split in (["train", "dev"] if parsed_args_explagraphs.split == "all" else [parsed_args_explagraphs.split]):
+                for split in (
+                        ["train", "dev"] if parsed_args_explagraphs.split == "all" else [parsed_args_explagraphs.split]
+                ):
                     train += load_explagraphs(
                         split=split, tokenizer=tokenizer,
                         max_length_sample=parsed_args_explagraphs.max_length_sample,
@@ -173,7 +201,8 @@ if __name__ == "__main__":
                 arg_ARCT = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
                 arg_ARCT.add_argument("-s", "--split", action="store", default="train", type=str,
                                       choices=["all", "train", "dev", "test"], required=False)
-                arg_ARCT.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_ARCT.add_argument("-l", "--max_length_sample", action="store", default=108, type=int,
+                                      required=False)
                 arg_ARCT.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
                 arg_ARCT.add_argument("--exclude_adversarial_data", action="store_true", default=False, required=False)
                 arg_ARCT.add_argument("--include_topic", action="store_true", default=False, required=False)
@@ -204,13 +233,15 @@ if __name__ == "__main__":
                 logger.debug("You want to use the ARCT-dataset as a part of the training set with "
                              "following specifications: {}", args.use_ARCT)
                 arg_ARCTUKW = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-                arg_ARCTUKW.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_ARCTUKW.add_argument("-l", "--max_length_sample", action="store", default=108, type=int,
+                                         required=False)
                 arg_ARCTUKW.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
                 arg_ARCTUKW.add_argument("-th", "--quality_threshold", action="store", default=None, type=float,
                                          required=False)
                 arg_ARCTUKW.add_argument("--include_topic", action="store_true", default=False, required=False)
                 arg_ARCTUKW.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-                arg_ARCTUKW.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                arg_ARCTUKW.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                         required=False)
                 parsed_args_arct_ukw = arg_ARCTUKW.parse_args(
                     args.use_ARCTUKW[1:].split("#") if args.use_ARCTUKW.startswith("#") else args.use_ARCTUKW.split("#")
                 )
@@ -234,7 +265,8 @@ if __name__ == "__main__":
                 arg_IBM = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
                 arg_IBM.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
                 arg_IBM.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
-                arg_IBM.add_argument("-th", "--quality_threshold", action="store", default=None, type=float, required=False)
+                arg_IBM.add_argument("-th", "--quality_threshold", action="store", default=None, type=float,
+                                     required=False)
                 arg_IBM.add_argument("-s", "--split", action="store", default="all", type=str,
                                      choices=["all", "train", "dev", "test"], required=False)
                 arg_IBM.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
@@ -260,12 +292,14 @@ if __name__ == "__main__":
                 logger.debug("You want to use the Student-Essays-dataset as a part of the training set with "
                              "following specifications: {}", args.use_essays)
                 arg_essays = argparse.ArgumentParser(add_help=False, allow_abbrev=True, exit_on_error=False)
-                arg_essays.add_argument("-l", "--max_length_sample", action="store", default=108, type=int, required=False)
+                arg_essays.add_argument("-l", "--max_length_sample", action="store", default=108, type=int,
+                                        required=False)
                 arg_essays.add_argument("-n", "--max_number", action="store", default=-1, type=int, required=False)
                 arg_essays.add_argument("--include_samples_without_detail_annotation_info", action="store_false",
                                         default=True, required=False)
                 arg_essays.add_argument("--continuous_val_nov", action="store_true", default=False, required=False)
-                arg_essays.add_argument("--continuous_sample_weight", action="store_true", default=False, required=False)
+                arg_essays.add_argument("--continuous_sample_weight", action="store_true", default=False,
+                                        required=False)
                 parsed_args_essays = arg_essays.parse_args(
                     args.use_essays[1:].split("#") if args.use_essays.startswith("#") else args.use_essays.split("#")
                 )
@@ -273,7 +307,8 @@ if __name__ == "__main__":
                     tokenizer=tokenizer,
                     max_length_sample=parsed_args_essays.max_length_sample,
                     max_number=parsed_args_essays.max_number,
-                    exclude_samples_without_detail_annotation_info=parsed_args_essays.include_samples_without_detail_annotation_info,
+                    exclude_samples_without_detail_annotation_info=
+                    parsed_args_essays.include_samples_without_detail_annotation_info,
                     continuous_val_nov=parsed_args_essays.continuous_val_nov,
                     continuous_sample_weight=parsed_args_essays.continuous_sample_weight,
                 )
@@ -329,33 +364,26 @@ if __name__ == "__main__":
                 )
 
                 dev += load_annotation(
-                        split="dev",
-                        tokenizer=tokenizer,
-                        max_length_sample=parsed_args_annotation.max_length_sample,
-                        max_number=parsed_args_annotation.max_number,
-                        include_topic=parsed_args_annotation.include_topic,
-                        continuous_val_nov=parsed_args_annotation.continuous_val_nov,
-                        continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
-                        min_confidence=parsed_args_annotation.min_confidence
-                    )
+                    split="dev",
+                    tokenizer=tokenizer,
+                    max_length_sample=parsed_args_annotation.max_length_sample,
+                    max_number=parsed_args_annotation.max_number,
+                    include_topic=parsed_args_annotation.include_topic,
+                    continuous_val_nov=parsed_args_annotation.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
+                    min_confidence=parsed_args_annotation.min_confidence
+                )
 
                 test += load_annotation(
-                        split="test_without_dev_topics" if parsed_args_annotation.no_dev_overlap else "test",
-                        tokenizer=tokenizer,
-                        max_length_sample=parsed_args_annotation.max_length_sample,
-                        max_number=parsed_args_annotation.max_number,
-                        include_topic=parsed_args_annotation.include_topic,
-                        continuous_val_nov=parsed_args_annotation.continuous_val_nov,
-                        continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
-                        min_confidence=parsed_args_annotation.min_confidence
-                    )
-    else:
-        logger.warning("OK, let's load the dataset from \"{}\" (all --use-parameters are ignored)",
-                       args.use_preloaded_dataset.name)
-        datasets = ValidityNoveltyDataset.load(path=args.use_preloaded_dataset)
-        train: ValidityNoveltyDataset = datasets["train"]
-        dev: ValidityNoveltyDataset = datasets["dev"]
-        test: ValidityNoveltyDataset = datasets["test"]
+                    split="test_without_dev_topics" if parsed_args_annotation.no_dev_overlap else "test",
+                    tokenizer=tokenizer,
+                    max_length_sample=parsed_args_annotation.max_length_sample,
+                    max_number=parsed_args_annotation.max_number,
+                    include_topic=parsed_args_annotation.include_topic,
+                    continuous_val_nov=parsed_args_annotation.continuous_val_nov,
+                    continuous_sample_weight=parsed_args_annotation.continuous_sample_weight,
+                    min_confidence=parsed_args_annotation.min_confidence
+                )
 
     if args.generate_more_training_samples:
         logger.info("You want to automatically generate more training samples - ok, let's do it!")
@@ -389,11 +417,14 @@ if __name__ == "__main__":
         sampling = False
         parsed_args_sample = None
 
-    output_dir: Path = Path()
+    output_dir: Union[Path, List[Path]]
 
-    if args.use_preloaded_dataset is None:
-        output_dir: Path = train.dataset_path(base_path=Path(".out", VERSION, args.transformer),
-                                              num_samples=None if args.sample == "n/a" else (len(train.samples_original)/2 if parsed_args_sample is None else parsed_args_sample.number))
+    if len(args.use_preloaded_dataset) == 0:
+        output_dir: Path = train.dataset_path(
+            base_path=Path(".out", VERSION, args.transformer),
+            num_samples=None if args.sample == "n/a" else (len(train.samples_original)/2
+                                                           if parsed_args_sample is None else parsed_args_sample.number)
+        )
 
         if output_dir.exists():
             logger.warning("The dictionary \"{}\" exists already - [re]move it!", output_dir.absolute())
@@ -407,31 +438,40 @@ if __name__ == "__main__":
             logger.info("Moved to: {}", move(str(output_dir.absolute()), str(target.absolute())))
         output_dir.mkdir(parents=True, exist_ok=True)
     else:
-        output_dir: Path = args.use_preloaded_dataset
+        output_dir = []
+        for pld in args.use_preloaded_dataset:
+            output_dir_temp: Path = Path(pld)
 
-        if args.save != "n/a" and args.save != "no-dataset":
-            logger.debug("Don't save/ analyse loaded datasets again!")
+            if args.save != "n/a" and args.save != "no-dataset":
+                logger.debug("Don't save/ analyse loaded datasets again!")
 
-        output_dir = output_dir.joinpath("_reload")
-        output_dir = output_dir.joinpath(
-            "{}-{}".format(args.transformer, len(list(output_dir.glob(pattern="{}-*".format(args.transformer)))))
-        )
-        logger.info("Final output path: {}", output_dir)
+            output_dir_temp = output_dir_temp.joinpath("_reload")
+            output_dir_temp = output_dir_temp.joinpath(
+                "{}-{}".format(args.transformer,
+                               len(list(output_dir_temp.glob(pattern="{}-*".format(args.transformer)))))
+            )
+            output_dir.append(output_dir_temp)
+            logger.info("Final output path added: {}", output_dir_temp)
 
     # #################################################################################################################
 
     def run(repetition_index: int = -1) -> Dict:
         logger.info("Let's start repetition {}", repetition_index)
 
+        _train = train[repetition_index] if isinstance(train, List) else train
+        _dev = dev[repetition_index] if isinstance(dev, List) else dev
+        _test = test[repetition_index] if isinstance(test, List) else test
+        _output_dir = output_dir[repetition_index] if isinstance(output_dir, List) else output_dir
+
         for equiv_split in args.equalize_source_distribution:
             logger.info("Ok, you want to equalize the sample-source-distribution of the \"{}\"-split", equiv_split)
             result = None
             if "train" in equiv_split:
-                result = train.equalize_source_distribution()
+                result = _train.equalize_source_distribution()
             elif "dev" in equiv_split:
-                result = dev.equalize_source_distribution()
+                result = _dev.equalize_source_distribution()
             elif "test" in equiv_split:
-                result = test.equalize_source_distribution()
+                result = _test.equalize_source_distribution()
 
             if result is None:
                 logger.warning("Your defined split \"{}\" was not found -- "
@@ -443,59 +483,62 @@ if __name__ == "__main__":
 
         if sampling:
             if parsed_args_sample is None:
-                final_train_samples = train.sample(seed=42+repetition_index)
+                final_train_samples = _train.sample(seed=42+repetition_index)
             else:
-                final_train_samples = train.sample(
+                final_train_samples = _train.sample(
                     number_or_fraction=parsed_args_sample.number if parsed_args_sample.number is not None else
                     (parsed_args_sample.fraction if parsed_args_sample.fraction is not None else 1.),
                     forced_balanced_class_distribution=parsed_args_sample.not_forced_balanced_dataset,
                     force_classes=parsed_args_sample.not_forced_balanced_dataset
                     if parsed_args_sample.classes == "n/a" else
                     (True if len(parsed_args_sample.classes) == 0 else
-                     [(int(parsed_args_sample.classes[i]) if parsed_args_sample.classes[i].lstrip(" -+").isdigit()
-                       else parsed_args_sample.classes[i],
-                       int(parsed_args_sample.classes[i+1]) if parsed_args_sample.classes[i+1].lstrip(" -+").isdigit()
-                       else parsed_args_sample.classes[i+1])
-                      for i in range(0, len(parsed_args_sample.classes)-1, 2)]),
+                     [(int(parsed_args_sample.classes[j]) if parsed_args_sample.classes[j].lstrip(" -+").isdigit()
+                       else parsed_args_sample.classes[j],
+                       int(parsed_args_sample.classes[j + 1]) if parsed_args_sample.classes[j + 1].lstrip(" -+").isdigit()
+                       else parsed_args_sample.classes[j + 1])
+                      for j in range(0, len(parsed_args_sample.classes) - 1, 2)]),
                     allow_automatically_created_samples=parsed_args_sample.automatic_samples,
                     seed=42+repetition_index
                 )
 
             logger.trace("Final training-samples: {}", " +++ ".join(map(lambda t: str(t), final_train_samples)))
 
-        logger.info("To summarize, you have {} training data, {} validation data and {} test data", len(train),
-                    len(dev), len(test))
-        if not args.skip_training and len(train) == 0:
+        if args.ignore_weights:
+            _train.fix_sample_weights(fixed_value=args.ignore_weights)
+
+        logger.info("To summarize, you have {} training data, {} validation data and {} test data", len(_train),
+                    len(_dev), len(_test))
+        if not args.skip_training and len(_train) == 0:
             logger.warning("You want to train without training data! Please explicit define some with your parameters!")
 
-        if len(test) == 0:
+        if len(_test) == 0:
             logger.warning("No test data given...")
 
-        if args.use_preloaded_dataset is None:
+        if len(args.use_preloaded_dataset) == 0:
             if repetition_index >= 0:
-                _output_dir = output_dir.joinpath("repetition-{}".format(repetition_index))
+                _output_dir = _output_dir.joinpath("repetition-{}".format(repetition_index))
             else:
-                _output_dir = output_dir
+                _output_dir = _output_dir
 
             if args.save != "n/a" and args.save != "no-dataset":
                 logger.debug("You want to save the dataset")
-                train.save(path=_output_dir.joinpath("_train"))
-                dev.save(path=_output_dir.joinpath("_dev"))
-                test.save(path=_output_dir.joinpath("_test"))
+                _train.save(path=_output_dir.joinpath("_train"))
+                _dev.save(path=_output_dir.joinpath("_dev"))
+                _test.save(path=_output_dir.joinpath("_test"))
 
             if (isinstance(args.analyse, str) and args.analyse == "train") or "train" in args.analyse:
-                train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
-                                          save_heatmaps=str(_output_dir.joinpath("train_analyse.png").absolute()))
+                _train.depth_analysis_data(show_heatmaps=False, handling_not_known_data=.5,
+                                           save_heatmaps=str(_output_dir.joinpath("train_analyse.png").absolute()))
             if (isinstance(args.analyse, str) and (args.analyse.startswith("dev") or args.analyse.startswith("val"))) \
                     or "dev" in args.analyse or "development" in args.analyse \
                     or "val" in args.analyse or "validation" in args.analyse:
-                dev.depth_analysis_data(show_heatmaps=False,
-                                        save_heatmaps=str(_output_dir.joinpath("dev_analyse.png").absolute()))
+                _dev.depth_analysis_data(show_heatmaps=False,
+                                         save_heatmaps=str(_output_dir.joinpath("dev_analyse.png").absolute()))
             if (isinstance(args.analyse, str) and args.analyse == "test") or "test" in args.analyse:
-                test.depth_analysis_data(show_heatmaps=False,
-                                         save_heatmaps=str(_output_dir.joinpath("test_analyse.png").absolute()))
+                _test.depth_analysis_data(show_heatmaps=False,
+                                          save_heatmaps=str(_output_dir.joinpath("test_analyse.png").absolute()))
         else:
-            logger.debug("Let's continue with \"{}\"", args.use_preloaded_dataset)
+            logger.debug("Let's continue with \"{}\"", _output_dir)
 
         trainer = ValNovTrainer(
             model=RobertaForValNovRegression.from_pretrained(pretrained_model_name_or_path=args.transformer),
@@ -505,14 +548,14 @@ if __name__ == "__main__":
                 do_eval=True,
                 do_predict=True,
                 evaluation_strategy="steps",
-                eval_steps=int((len(train)/args.batch_size)/4),
+                eval_steps=int((len(_train)/args.batch_size)/4),
                 per_device_train_batch_size=args.batch_size,
                 per_device_eval_batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
                 weight_decay=args.learning_rate/100,
                 num_train_epochs=5,
                 lr_scheduler_type="cosine",
-                warmup_steps=min(100, len(train)/2),
+                warmup_steps=min(100, len(_train)/2),
                 log_level="debug" if args.verbose else "warning",
                 log_level_replica="info" if args.verbose else "warning",
                 logging_strategy="steps",
@@ -520,7 +563,7 @@ if __name__ == "__main__":
                 logging_first_step=True,
                 logging_nan_inf_filter=True,
                 save_strategy="steps",
-                save_steps=int((len(train)/args.batch_size)/4),
+                save_steps=int((len(_train)/args.batch_size)/4),
                 save_total_limit=6+int(args.verbose),
                 label_names=["validity", "novelty"],
                 load_best_model_at_end=True,
@@ -530,8 +573,8 @@ if __name__ == "__main__":
                 push_to_hub=False,
                 gradient_checkpointing=args.save_memory_training
             ),
-            train_dataset=train,
-            eval_dataset=None if len(dev) == 0 else dev,
+            train_dataset=_train,
+            eval_dataset=None if len(_dev) == 0 else _dev,
             compute_metrics=val_nov_metric,
             callbacks=[transformers.EarlyStoppingCallback(early_stopping_patience=4, early_stopping_threshold=.001)]
         )
@@ -539,7 +582,7 @@ if __name__ == "__main__":
         logger.success("Successfully initialized the trainer: {}", trainer)
 
         if not args.skip_training:
-            logger.info("Let's start the training ({} samples)", len(train))
+            logger.info("Let's start the training ({} samples)", len(_train))
 
             train_out = trainer.train(ignore_keys_for_eval=["logits", "loss", "hidden_states", "attentions"])
 
@@ -553,36 +596,56 @@ if __name__ == "__main__":
                 logger.debug("Removed the following callback handler: {}. It's an early stopping training callback and "
                              "since we're leaving the training procedure, we don't need them anymore.", removed_cb)
 
-        if len(test) >= 10:
-            logger.info("OK, let's test the best model with: {}", test)
+        if len(_test) >= 10:
+            logger.info("OK, let's test the best model to test on: {}/ {}", _dev, _test)
             try:
+                logger.debug("First, calculate the dev-performance ({})", _dev)
                 test_metrics: Dict = trainer.metrics_format(
-                    metrics=trainer.evaluate(eval_dataset=test,
+                    metrics=trainer.evaluate(eval_dataset=_dev,
+                                             ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                             metric_key_prefix="dev")
+                )
+                test_metrics["data_train"] = str(_train)
+                test_metrics["data_dev"] = str(_dev)
+                test_metrics["data_test"] = str(_test)
+                logger.debug("Now the standard test ({})", _test)
+                test_metrics.update(trainer.metrics_format(
+                    metrics=trainer.evaluate(eval_dataset=_test,
                                              ignore_keys=["logits", "loss", "hidden_states", "attentions"],
                                              metric_key_prefix="test")
-                )
-                test.include_premise = False
-                logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with the fool-test: {}",
-                             test)
-                test_metrics.update(trainer.metrics_format(
-                    metrics=trainer.evaluate(eval_dataset=test,
-                                             ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                             metric_key_prefix="test_wo_premise")
                 ))
-                test.include_premise = True
-                test.include_conclusion = False
-                logger.debug("Another clever-hans-check. Let's continue with the fool-test: {}", test)
-                test_metrics.update(trainer.metrics_format(
-                    metrics=trainer.evaluate(eval_dataset=test,
-                                             ignore_keys=["logits", "loss", "hidden_states", "attentions"],
-                                             metric_key_prefix="test_wo_conclusion")
-                ))
-                test.include_premise = True
-                test.include_conclusion = True
+                logger.debug("Standard-test DONE -- so we have a clever hans now? Let's continue with two fool-tests: "
+                             "{}",
+                             _test)
+                for fool in [("test_wo_premise", (False, True)), ("test_wo_conclusion", (True, False))]:
+                    _test.include_premise = fool[1][0]
+                    _test.include_conclusion = fool[1][1]
+                    logger.debug("Clever-hans-check: {}", fool[0])
+                    fool_test_results: Dict = trainer.metrics_format(
+                        metrics=trainer.evaluate(eval_dataset=_test,
+                                                 ignore_keys=["logits", "loss", "hidden_states", "attentions"],
+                                                 metric_key_prefix=fool[0])
+                    )
+                    try:
+                        logger.debug("Don't need following stats: {}/{}/{}/{}/{}/{}/{}",
+                                     fool_test_results.pop("{}_size".format(fool[0])),
+                                     fool_test_results.pop("{}_mse_validity".format(fool[0])),
+                                     fool_test_results.pop("{}_mse_novelty".format(fool[0])),
+                                     fool_test_results.pop("{}_approximately_hits_validity".format(fool[0])),
+                                     fool_test_results.pop("{}_approximately_hits_novelty".format(fool[0])),
+                                     fool_test_results.pop("{}_exact_hits_validity".format(fool[0])),
+                                     fool_test_results.pop("{}_exact_hits_novelty".format(fool[0])))
+                    except KeyError:
+                        logger.opt(exception=True).warning("Please update this result-dict-interface!")
+                    test_metrics.update(fool_test_results)
+                _test.include_premise = True
+                _test.include_conclusion = True
 
                 try:
-                    logger.success("Test 3 times on {} test samples: {}", len(test),
-                                   ", ".join(map(lambda mv: "{}: {}".format(mv[0], round(mv[1], 3)), test_metrics.items())))
+                    logger.success("Test 3 times on {} test samples: {}",
+                                   len(_test),
+                                   ", ".join(map(lambda mv: "{}: {}".format(
+                                       mv[0], round(mv[1], 3)), test_metrics.items())))
                 except TypeError:
                     logger.opt(exception=False).warning("Strange test-metrics-outputs-dict. Should be str->float, "
                                                         "but we have following: {}",
@@ -594,7 +657,7 @@ if __name__ == "__main__":
                                                  _output_dir.absolute())
                 test_metrics = dict()
             except IndexError:
-                logger.opt(exception=True).error("Corrupted test data? {}", test)
+                logger.opt(exception=True).error("Corrupted test data? {}", _test)
                 test_metrics = dict()
         else:
             test_metrics = dict()
@@ -613,7 +676,7 @@ if __name__ == "__main__":
                 data="Run from {} with following inputs args:\n{}\n\n Train-data:{}/Dev-data:{}/Test-data:{}".format(
                     datetime.datetime.now().isoformat(),
                     "\n".join(sys.argv[1:]) if len(sys.argv) >= 2 else "no input args",
-                    train, dev, test
+                    _train, _dev, _test
                 ),
                 encoding="utf-8",
                 errors="ignore"
@@ -642,20 +705,21 @@ if __name__ == "__main__":
 
         if repetition_index >= 0:
             logger.success("Repetition {} done", repetition_index)
-            train.reset_to_original_data()
-            dev.reset_to_original_data()
-            test.reset_to_original_data()
-            logger.trace("Resetted data: {}/{}/{}", train, dev, test)
+            _train.reset_to_original_data()
+            _dev.reset_to_original_data()
+            _test.reset_to_original_data()
+            logger.trace("Reset data: {}/{}/{}", _train, _dev, _test)
         return test_metrics
 
     # #################################################################################################################
 
-    if args.repetitions >= 2:
-        logger.info("You want to repeat your experiments multiple times ({}). OK...", args.repetitions)
+    if args.repetitions >= 2 or len(args.use_preloaded_dataset) >= 2:
+        logger.info("You want to repeat your experiments multiple times ({}). OK...",
+                    args.repetitions if len(args.use_preloaded_dataset) == 0 else len(args.use_preloaded_dataset))
         results = dict()
         fail_trains = 0
 
-        for i in range(args.repetitions):
+        for i in range(args.repetitions if len(args.use_preloaded_dataset) == 0 else len(args.use_preloaded_dataset)):
             res = run(i)
             if "never_predicted_classes" in res and res["never_predicted_classes"] >= 3:
                 logger.warning("Repetition {} results in a classifier with always a static prediction - "
@@ -677,23 +741,29 @@ if __name__ == "__main__":
                         results[k] = [v]
 
         logger.success("Run successfully the experiment {} times, single results in following path: {}",
-                       args.repetitions, output_dir.name)
+                       args.repetitions if len(args.use_preloaded_dataset) == 0 else len(args.use_preloaded_dataset),
+                       output_dir.name if isinstance(output_dir, Path) else output_dir[0].name)
 
-        parent_output_path = output_dir
+        final_results = {
+            "fail_trains": fail_trains,
+            "repetitions": args.repetitions if len(args.use_preloaded_dataset) == 0 else len(args.use_preloaded_dataset)
+        }
 
-        final_results = {"fail_trains": fail_trains, "repetitions": args.repetitions}
+        if len(args.use_preloaded_dataset) >= 1:
+            final_results["preloaded_datasets"] = args.use_preloaded_dataset
 
         for k, v_list in results.items():
-            if all(map(lambda v: isinstance(v, numbers.Number), v_list)):
+            if all(map(lambda val: isinstance(val, numbers.Number), v_list)):
                 n = numpy.fromiter(v_list, dtype=int if all(map(lambda _v: isinstance(_v, int), v_list)) else float)
                 masked_n = numpy.ma.masked_array(n, mask=[i == -1 for i in n])
                 final_results[k] = {
-                    "min": n.min().round(3),
+                    "min": n.min().round(4),
                     "repetition_index_min": n.argmin(),
-                    "mean": masked_n.mean().round(4),
-                    "max": n.max().round(3),
+                    "mean": masked_n.mean().round(5),
+                    "max": n.max().round(4),
                     "repetition_index_max": n.argmax(),
-                    "derivation": masked_n.std().round(3)
+                    # "derivation": masked_n.std().round(3),
+                    "values": n.round(3)
                 }
             else:
                 final_results[k] = v_list
@@ -707,7 +777,8 @@ if __name__ == "__main__":
         )
 
         logger.success("Final results: {}", final_results)
-        parent_output_path.joinpath("aggregated_stats.txt").write_text(data=final_results_str, encoding="utf-8",
-                                                                       errors="ignore")
+        for out_dir in (output_dir if isinstance(output_dir, List) else [output_dir]):
+            out_dir.joinpath("aggregated_stats.txt").write_text(data=final_results_str, encoding="utf-8",
+                                                                errors="ignore")
     else:
         run()
