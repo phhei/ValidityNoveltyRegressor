@@ -1,0 +1,65 @@
+-t roberta-large -bs 8 -lr 3e-5 --equalize_source_distribution --save --analyse train dev test --clean --use_annotation_ValTest \#--include_topic\#--min_confidence\#majority
+
+1. Original                                             --use_annotation_train \#--include_topic
+2. ExplaGraphs+IBM+Essays (only external)               --use_ExplaGraphs --use_IBM --use_essays \#--include_samples_without_detail_annotation_info
+3. only synthetic                                       -s \#--automatic_samples
+
+JOIN
+
+1. without class balance                                -s \#--not_forced_balanced_dataset
+2. with class balance                                   -s \#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1
+
+JOIN
+
+1. without weighting (in _reload)                       --ignore_weights (3 im Falle von Original)
+2. with dataset weighting
+3. with individual instance weighting                   --use_annotation_train \#--include_topic\#--continuous_sample_weight
+                                                        --use_ExplaGraphs \#-s\#all\#--continuous_sample_weight --use_IBM \#--continuous_sample_weight --use_essays \#--include_samples_without_detail_annotation_info\#--continuous_sample_weight
+
+JOIN
+
+1. 100 samples (12 rep.)                                -s \#-n\#100
+2. 1.000 samples (12 rep.)                              -s \#-n\#1000
+3. 10.000 samples (6 rep.)                              -s \#-n\#10000
+4. 100.000 samples (3 rep.)                             -s \#-n\#100000
+
+
+--repetitions 12
+
+Tables (F1-scores) without weighting:
+                                            just all data (without class balance)       class-balanced                  #n all data class balanced
+V0.4.2                                      ValNov         Val      Nov                 ValNov         Val      Nov     ValNov         Val      Nov
+Original (#n 750)                           s.u.                                        s.u                             n/a            n/a      n/a
+Original+synthetic (#n 751)                 n/a            n/a      n/a                 n/a            n/a      n/a     14.4-32.3-33.5 77.6     42.4
+Original+ExplaGraphs+IBM+Essays (#n 34k)    15.3-31.3-31.3 79.7     21.7                n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays (#n 33k)             13.1-20.0-20.0 67.8     0.1                 n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays+synthetic (#n 33k)   n/a            n/a      n/a                 n/a            n/a      n/a     13.1-19.2-19.2C76.3     13.0
+all (#n 34k)                                n/a            n/a      n/a                 n/a            n/a      n/a     13.1-31.5-31.5c75.6     37.5
+
+Tables (F1-scores) with dataset weighting:
+                                            just all data (without class balance)       class-balanced                  #n all data class balanced
+V0.4.2                                      ValNov         Val      Nov                 ValNov         Val      Nov     ValNov         Val      Nov
+Original (#n 750->137)                      22.6-22.8-24.9 75.5     0.0[rep-8]          13.0-21.4-22.0C71.7     14.1    n/a            n/a      n/a
+Original+synthetic (#n 751)                 n/a            n/a      n/a                 n/a            n/a      n/a     13.1-35.0-35.0 76.0     43.1
+Original+ExplaGraphs+IBM+Essays (#n 34k)    10.0-10.0-10.0CP75.5    60.4                n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays (#n 33k)             10.0-10-0-10.0CP75.5    60.4                n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays+synthetic (#n 33k)   n/a            n/a      n/a                 n/a            n/a      n/a     13.1-16.2-16.2c73.7     0.0
+all (#n 34k)                                n/a            n/a      n/a                 n/a            n/a      n/a     13.1-13.1-13.1CP23.9    0.0
+
+Tables (F1-scores) with individual weighting:
+                                            just all data (without class balance)       class-balanced                  #n all data class balanced
+V0.4.2                                      ValNov         Val      Nov                 ValNov         Val      Nov     ValNov         Val      Nov
+Original (#n 750)                           21.6-22.7-25.2 75.5     0.0[rep-1]          12.9-15.8-21.9cP74.7    10.4    n/a            n/a      n/a
+Original+synthetic (#n 751)                 n/a            n/a      n/a                 n/a            n/a      n/a     13.1-39.0-39.0 76.8     63.1
+Original+ExplaGraphs+IBM+Essays (#n 34k)    100-20.4-23.8c 63.2     30.8                n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays (#n 33k)             10.0-10-0-10.0CP75.5    60.4                n/a            n/a      n/a     n/a            n/a      n/a
+ExplaGraphs+IBM+Essays+synthetic (#n 33k)   n/a            n/a      n/a                 n/a            n/a      n/a     121597
+all (#n 34k)                                n/a            n/a      n/a                 n/a            n/a      n/a     121596*
+
+Final table:
+                                            100                                 1.000                               10.000                              100.000
+V0.4.2                                      ValNov         Val      Nov         ValNov         Val      Nov         ValNov         Val      Nov         ValNov         Val      Nov
+Original+synthetic (w/o weighting)          07.7-15.4-17.0Cp8.2     43.1        13.1-37.8-37.8 78.6     47.2        10.5-29.8-29.8 67.5     23.2        30.0-32.5-32.5 73.1     53.0
+Original+synthetic (ind. weighting)         13.5-18.2-20.0C75.5     31.6        13.1-36.2-36.2 78.4     49.5        13.1-37.7-37.7 71.1     62.6        13.1-31.6-31.6 70.1     57.6
+ExplaGraphs+IBM+Essays+synthetic (weighting)13.1-27.7-27.7c71.0     44.2[rep-5] 12.0-35.6-35.6 73.2     65.5[rep-8] 10.0-30.1-30.1c69.2     58.4[rep-4] 13.1-22.0-22.0c71.8     24.7[rep-0]
+all (weighting)                             08.7-19.7-19.7c67.0     35.4[rep-0] 13.1-23.8-25.4 73.3     07.5[rep-10]10.0-37.7-37.7 78.8     45.8[rep-0] 29.2-33.7-33.7 76.2     41.9[rep-1]

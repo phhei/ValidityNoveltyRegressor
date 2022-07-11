@@ -489,7 +489,7 @@ class ValidityNoveltyDataset(Dataset):
 
         return ret
 
-    def sample(self, number_or_fraction: Union[int, float] = .5,
+    def sample(self, number_or_fraction: Union[int, float] = float(1),
                allow_automatically_created_samples: bool = False,
                forced_balanced_class_distribution: bool = True,
                force_classes: Union[bool, List[Tuple[Union[int, str], Union[int, str]]]] = True,
@@ -799,7 +799,9 @@ class ValidityNoveltyDataset(Dataset):
         else:
             samples_in_not_chosen_set_in_extraction = len(samples_in_not_chosen_set)
 
-        number_samples_class = (number - samples_in_not_chosen_set_in_extraction)/len(chosen_class_set)
+        number_samples_class = (number - samples_in_not_chosen_set_in_extraction)/len(chosen_class_set) \
+            if allow_automatically_created_samples else \
+            min([v for k, v in self.get_sample_class_distribution(for_original_data=True).items() if "?" not in k])
 
         equal_class_distribution_dataset(minimum_number=math.floor(number_samples_class),
                                          maximum_number=math.ceil(number_samples_class))
