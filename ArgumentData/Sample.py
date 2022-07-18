@@ -51,7 +51,8 @@ class Sample:
                 conclusion=self.conclusion,
                 validity=.1 * self.validity * int(include_paraphrase),
                 novelty=0.05 * int(include_paraphrase),
-                weight=self.weight * (.9 - .15 * int(include_paraphrase))
+                weight=self.weight * (.9 - .15 * int(include_paraphrase)),
+                source="{}#{}".format(self.source, "negated conclusion-> premise")
             )
         elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
             return Sample(
@@ -59,7 +60,8 @@ class Sample:
                 conclusion=negate(self.conclusion),
                 validity=(1 - self.validity) ** 2,
                 novelty=self.novelty,
-                weight=.9 * self.weight
+                weight=.9 * self.weight,
+                source="{}#{}".format(self.source, "negated conclusion")
             )
         elif not self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
             include_paraphrase = random.choice([True, False])
@@ -71,7 +73,8 @@ class Sample:
                 conclusion=self.conclusion,
                 validity=0,
                 novelty=0.05 * int(include_paraphrase),
-                weight=self.weight * (.9 - .15 * int(include_paraphrase))
+                weight=self.weight * (.9 - .15 * int(include_paraphrase)),
+                source="{}#{}".format(self.source, "negated conclusion-> premise")
             )
         elif not self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
             selection = random.randint(1, 3 + int(other_random_sample is not None))
@@ -145,7 +148,8 @@ class Sample:
                 conclusion=negate(self.conclusion),
                 validity=(1 - self.validity) ** 2,
                 novelty=max(.5, .9 * self.novelty),
-                weight=.25 * self.weight
+                weight=.25 * self.weight,
+                source="{}#{}".format(self.source, "negated conclusion")
             )
         elif self.is_valid(none_is_not=True) and not self.is_novel(none_is_not=True):
             raise NotImplementedError("???")

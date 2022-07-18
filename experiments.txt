@@ -14,7 +14,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Was wir schon mal festsetzen können:
--t roberta-large -bs 8 -lr 3e-5 --equalize_source_distribution --save --analyse train dev test --clean --repetitions 12 --use_annotation_ValTest \#--include_topic\#--min_confidence\#majority\#--continuous_sample_weight  -s \#-\n#XXX\#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1\#--automatic_samples
+-t roberta-large -bs 8 -lr 3e-5 --equalize_source_distribution [~~train~~] --save --analyse train dev test --clean --repetitions 12 --use_annotation_ValTest \#--include_topic\#--min_confidence\#majority\#--continuous_sample_weight  -s \#-\n#XXX\#--classes\#1\#1\#1\#-1\#-\1\#1\#-1\#-1\#--automatic_samples
 
 -------------------------------------------------------------------------------------
 Without sample weight at all (--ignore_weights) // in der Mitte=best-dev-selected F1 ohne pc:
