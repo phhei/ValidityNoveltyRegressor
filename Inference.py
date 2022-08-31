@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
 from typing import Tuple, List
 
+import torch
+
 from HGTrainer import RobertaForValNovRegression, ValNovOutput
 from pathlib import Path
 from loguru import logger
@@ -49,6 +51,7 @@ if __name__ == "__main__":
     novelty = []
     batch_part = ([], [])
 
+    @torch.no_grad()
     def process(batch: Tuple[List[str], List[str]]) -> None:
         logger.trace("Received following samples: {}",
                      "|".join(map(lambda i: "{}-->{}".format(batch[0][i], batch[1][i]), range(len(batch[0])))))
