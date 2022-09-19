@@ -10,6 +10,11 @@ from ArgumentData.StringUtils import paraphrase, negate, wordnet_changes_text, a
 
 
 class Sample:
+    """
+    A single sample
+    (instance consisting premise, conclusion, an (optional) validity value, an (optional) novelty value
+    and a sample weight (training impact))
+    """
     def __init__(self, premise: str, conclusion: str, validity: Optional[float] = None,
                  novelty: Optional[float] = None, weight: float = 1., source: str = "unknown"):
         self.premise: str = premise
@@ -35,12 +40,31 @@ class Sample:
         return hash(self.premise) + hash(self.conclusion)
 
     def is_valid(self, none_is_not: bool = False) -> Optional[bool]:
+        """
+        Returns whether the sample is valid or not
+
+        :param none_is_not: if the validity is unknown, you can treat this as "not valid"
+        :return: the validity
+        """
         return (False if none_is_not else None) if self.validity is None else self.validity >= .5
 
     def is_novel(self, none_is_not: bool = False) -> Optional[bool]:
+        """
+        Returns whether the sample is novel or not
+
+        :param none_is_not: if the novelty is unknown, you can treat this as "not novel"
+        :return: the novelty
+        """
         return (False if none_is_not else None) if self.novelty is None else self.novelty >= .5
 
     def automatically_create_non_valid_non_novel_sample(self, other_random_sample: Optional[Any] = None):
+        """
+        See the clone& mutate procedure (synthetic data augmentation)
+
+        :param other_random_sample: in some cases we just append a random conclusion from another random sample -
+        you can define one here
+        :return: a new non-valid, non-novel sample
+        """
         if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
             include_paraphrase = random.choice([True, False])
             premises = [self.premise,
@@ -142,6 +166,11 @@ class Sample:
             raise AttributeError("Unexpected configuration: {}".format(self))
 
     def automatically_create_non_valid_novel_sample(self):
+        """
+        See the clone& mutate procedure (synthetic data augmentation)
+
+        :return: a new non valid but novel sample
+        """
         if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
             return Sample(
                 premise=self.premise,
@@ -210,6 +239,13 @@ class Sample:
             raise AttributeError("Unexpected configuration: {}".format(self))
 
     def automatically_create_valid_non_novel_sample(self, other_random_sample: Optional[Any] = None):
+        """
+        See the clone& mutate procedure (synthetic data augmentation)
+
+        :param other_random_sample: in some cases we just append/ substitute a random conclusion from another random
+        sample - you can define one here
+        :return: a new valid but non-novel sample
+        """
         if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
             premise = [
                 self.premise,
@@ -319,6 +355,11 @@ class Sample:
             raise AttributeError("Unexpected configuration: {}".format(self))
 
     def automatically_create_valid_novel_sample(self):
+        """
+        See the clone& mutate procedure (synthetic data augmentation)
+
+        :return: a new valid and novel sample
+        """
         if self.is_valid(none_is_not=True) and self.is_novel(none_is_not=True):
             selection = random.randint(1, 3)
             if selection == 1:

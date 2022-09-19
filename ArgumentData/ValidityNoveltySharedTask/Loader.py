@@ -75,8 +75,6 @@ def load_dataset(split: Literal["train", "dev", "test", "test_without_dev_topics
             ref_comparable_concl1: Optional[pandas.DataFrame] = None
             ref_comparable_concl2: Optional[pandas.DataFrame] = None
             if continuous_val_nov:
-                prem = row["Premise"]
-                concl = row["Conclusion"]
                 ref_comparable_concl1: pandas.DataFrame = df_relative.query(
                     expr="`Premise` == @prem and `Conclusion 1` == @concl",
                     inplace=False

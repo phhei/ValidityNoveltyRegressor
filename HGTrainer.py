@@ -224,14 +224,22 @@ def _val_nov_metric(is_validity: numpy.ndarray, should_validity: numpy.ndarray,
     }
 
     ret.update({
-        "f1_validity": 2 * ret_help["precision_validity"] * ret_help["recall_validity"] / max(1e-4, ret_help["precision_validity"] + ret_help["recall_validity"]),
-        "f1_novelty": 2 * ret_help["precision_novelty"] * ret_help["recall_novelty"] / max(1e-4, ret_help["precision_novelty"] + ret_help["recall_novelty"]),
-        "f1_val_neg": 2 * ret_help["precision_val_neg"] * ret_help["recall_val_neg"] / max(1e-4, ret_help["precision_val_neg"] + ret_help["recall_val_neg"]),
-        "f1_nov_neg": 2 * ret_help["precision_nov_neg"] * ret_help["recall_nov_neg"] / max(1e-4, ret_help["precision_nov_neg"] + ret_help["recall_nov_neg"]),
-        "f1_valid_novel": 2 * ret_help["precision_valid_novel"] * ret_help["recall_valid_novel"] / max(1e-4, ret_help["precision_valid_novel"] + ret_help["recall_valid_novel"]),
-        "f1_valid_nonnovel": 2 * ret_help["precision_valid_nonnovel"] * ret_help["recall_valid_nonnovel"] / max(1e-4, ret_help["precision_valid_nonnovel"] + ret_help["recall_valid_nonnovel"]),
-        "f1_nonvalid_novel": 2 * ret_help["precision_nonvalid_novel"] * ret_help["recall_nonvalid_novel"] / max(1e-4, ret_help["precision_nonvalid_novel"] + ret_help["recall_nonvalid_novel"]),
-        "f1_nonvalid_nonnovel": 2 * ret_help["precision_nonvalid_nonnovel"] * ret_help["recall_nonvalid_nonnovel"] / max(1e-4, ret_help["precision_nonvalid_nonnovel"] + ret_help["recall_nonvalid_nonnovel"])
+        "f1_validity": 2 * ret_help["precision_validity"] * ret_help["recall_validity"] /
+                       max(1e-4, ret_help["precision_validity"] + ret_help["recall_validity"]),
+        "f1_novelty": 2 * ret_help["precision_novelty"] * ret_help["recall_novelty"] /
+                      max(1e-4, ret_help["precision_novelty"] + ret_help["recall_novelty"]),
+        "f1_val_neg": 2 * ret_help["precision_val_neg"] * ret_help["recall_val_neg"] /
+                      max(1e-4, ret_help["precision_val_neg"] + ret_help["recall_val_neg"]),
+        "f1_nov_neg": 2 * ret_help["precision_nov_neg"] * ret_help["recall_nov_neg"] /
+                      max(1e-4, ret_help["precision_nov_neg"] + ret_help["recall_nov_neg"]),
+        "f1_valid_novel": 2 * ret_help["precision_valid_novel"] * ret_help["recall_valid_novel"] /
+                          max(1e-4, ret_help["precision_valid_novel"] + ret_help["recall_valid_novel"]),
+        "f1_valid_nonnovel": 2 * ret_help["precision_valid_nonnovel"] * ret_help["recall_valid_nonnovel"] /
+                             max(1e-4, ret_help["precision_valid_nonnovel"] + ret_help["recall_valid_nonnovel"]),
+        "f1_nonvalid_novel": 2 * ret_help["precision_nonvalid_novel"] * ret_help["recall_nonvalid_novel"] /
+                             max(1e-4, ret_help["precision_nonvalid_novel"] + ret_help["recall_nonvalid_novel"]),
+        "f1_nonvalid_nonnovel": 2 * ret_help["precision_nonvalid_nonnovel"] * ret_help["recall_nonvalid_nonnovel"] /
+                                max(1e-4, ret_help["precision_nonvalid_nonnovel"] + ret_help["recall_nonvalid_nonnovel"])
     })
 
     ret.update({
@@ -411,14 +419,14 @@ class RobertaForValNovRegression(RobertaForSequenceClassification):
             attentions=out.attentions,
             hidden_states=out.hidden_states,
             logits=out.logits,
-            loss=val_nov_loss(is_val=is_validity,
-                              is_nov=is_novelty,
-                              should_val=should_validity,
-                              should_nov=should_novelty,
-                              weights=weights,
-                              reduce=self.loss == "compute and reduce"
-                              ) if self.loss != "ignore" and should_validity is not None
-                                   and should_novelty is not None else None,
+            loss=val_nov_loss(
+                is_val=is_validity,
+                is_nov=is_novelty,
+                should_val=should_validity,
+                should_nov=should_novelty,
+                weights=weights,
+                reduce=self.loss == "compute and reduce"
+            ) if self.loss != "ignore" and should_validity is not None and should_novelty is not None else None,
             validity=is_validity,
             novelty=is_novelty
         )

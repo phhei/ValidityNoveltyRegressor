@@ -87,7 +87,7 @@ if __name__ == "__main__":
             "" if parsed_args.exclude_premise else (row["Premise"] if row.notna()["Premise"] else "failure")
         )
         batch_part[1].append(
-            "" if parsed_args.exclude_conclusion else  (row["Conclusion"] if row.notna()["Conclusion"] else "failure")
+            "" if parsed_args.exclude_conclusion else (row["Conclusion"] if row.notna()["Conclusion"] else "failure")
         )
         if len(batch_part[0]) < parsed_args.batch_size:
             logger.trace("Just add it to the batch")

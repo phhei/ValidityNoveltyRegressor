@@ -13,6 +13,20 @@ sentence_transformer: Optional[SentenceTransformer] = None
 
 
 def truncate_dataset(data: Union[DataFrame, List[Sample]], max_number: int = -1) -> Union[DataFrame, List[Sample]]:
+    """
+    Truncated the dataset by offering various sample techniques:
+
+    - "first": considering only the first samples (classic truncating)
+    - "random": discards random samples
+    - "less informative": embed all samples with SBERT and selects the less informative samples. Hence, each kept
+    sample is selected by maximizing the distance to all previous kept samples- This results in a very diverse sampling.
+    - "most informative": same as "less informative", but by minimizing the distance, hence avoiding outlier samples
+    - "mixed": behave as "random" with >=80% of data that should be truncated, else as "most informative"
+
+    :param data: the data that should be truncated
+    :param max_number: the maximum number an kept samples
+    :return: the kept samples
+    """
     if max_number >= 1:
         logger.debug("max-number is set to {}", max_number)
         if max_number >= len(data):
@@ -24,7 +38,8 @@ def truncate_dataset(data: Union[DataFrame, List[Sample]], max_number: int = -1)
                 r_df = data[:max_number]
                 logger.debug("Truncated to {} samples", len(r_df))
             elif sampling_technique == "random" or (sampling_technique == "mixed" and
-                                                    (max_number / len(data) > 1 / 5 or max_number * len(data) >= 10 ** 6)):
+                                                    (max_number / len(data) > 1 / 5
+                                                     or max_number * len(data) >= 10 ** 6)):
                 logger.trace("Ok, you want to have a cold start (term from active learning): "
                              "randomly sample {} out of {} samples", max_number, len(data))
                 if isinstance(data, DataFrame):

@@ -23,6 +23,9 @@ from HGTrainer import _val_nov_metric
 
 
 class ValidityNoveltyDataset(Dataset):
+    """
+    a dataset holding and processing single samples
+    """
     def __init__(self, samples: Iterable[Sample], tokenizer: PreTrainedTokenizer, max_length: int = 512,
                  name: str = "no name available") -> None:
         super().__init__()
@@ -125,7 +128,7 @@ class ValidityNoveltyDataset(Dataset):
 
     def fix_sample_weights(self, fixed_value: float) -> None:
         """
-        Fixes the sample weights for each sample to a given valuen in the dataset (regardless what the actual
+        Fixes the sample weights for each sample to a given value in the dataset (regardless what the actual
         sample weight is)
 
         :param fixed_value: the fixed values
@@ -148,7 +151,7 @@ class ValidityNoveltyDataset(Dataset):
         Generates a proper dataset path (for storing stats, fine-tuned models ect.)
 
         :param base_path: a base path
-        :param num_samples: how many samples are you expect to hvae in the dataset? If no number si given, the number
+        :param num_samples: how many samples are you expect to have in the dataset? If no number si given, the number
         is the actual number of sample (in the extracted split)
         :return: a good path
         """
@@ -160,7 +163,7 @@ class ValidityNoveltyDataset(Dataset):
                                        "{} samples".format(len(self.samples_extraction)
                                                            if num_samples is None else num_samples))
         if not self.include_premise:
-            base_path =  base_path.joinpath("wo premise")
+            base_path = base_path.joinpath("wo premise")
         if not self.include_conclusion:
             base_path = base_path.joinpath("wo conclusion")
         logger.debug("Home directory of the dataset: \"{}\"", base_path)
