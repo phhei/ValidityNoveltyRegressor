@@ -28,3 +28,6 @@ matplotlib==3.*
 
 ### for logging (not mandatory) ###
 Deprecated
+
+### for demo (not mandatory if you don't use the demo.py) ###
+gradio
