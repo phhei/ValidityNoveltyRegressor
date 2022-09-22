@@ -45,4 +45,4 @@ With ``Main.py``, you train and evaluate a model predicting validity and novelty
 
 ## Demo
 
-_coming soon..._
+You can play around [here](https://huggingface.co/spaces/pheinisch/ConclusionValidityNoveltyClassifier-Augmentation).
