@@ -6,15 +6,18 @@ This is the code for the paper which you can cite as follows:
 @inproceedings{heinisch-etal-2022-data,
     title = "Data Augmentation for Improving the Prediction of Validity and Novelty of Argumentative Conclusions",
     author = "Heinisch, Philipp  and
-      Plenz, Moritz and 
-      Opitz, Juri and 
+      Plenz, Moritz  and
+      Opitz, Juri  and
       Frank, Anette  and
       Cimiano, Philipp",
     booktitle = "Proceedings of the 9th Workshop on Argument Mining",
     month = oct,
     year = "2022",
-    address = "Gyeongju, Republic of Korea",
-    publisher = "Association for Computational Linguistics"
+    address = "Online and in Gyeongju, Republic of Korea",
+    publisher = "International Conference on Computational Linguistics",
+    url = "https://aclanthology.org/2022.argmining-1.2",
+    pages = "19--33",
+    abstract = "We address the problem of automatically predicting the quality of a conclusion given a set of (textual) premises of an argument, focusing in particular on the task of predicting the validity and novelty of the argumentative conclusion. We propose a multi-task approach that jointly predicts the validity and novelty of the textual conclusion, relying on pre-trained language models fine-tuned on the task. As training data for this task is scarce and costly to obtain, we experimentally investigate the impact of data augmentation approaches for improving the accuracy of prediction compared to a baseline that relies on task-specific data only. We consider the generation of synthetic data as well as the integration of datasets from related argument tasks. We show that especially our synthetic data, combined with class-balancing and instance-specific learning rates, substantially improves classification results (+15.1 points in $F_1$-score). Using only training data retrieved from related datasets by automatically labeling them for validity and novelty, combined with synthetic data, outperforms the baseline by 11.5 points in $F_1$-score.",
 }
 ````
 
